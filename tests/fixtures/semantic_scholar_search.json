@@ -1,0 +1,44 @@
+{
+  "total": 2,
+  "offset": 0,
+  "data": [
+    {
+      "paperId": "paper-001",
+      "title": "Continuous Glucose Monitoring in Older Adults",
+      "url": "https://www.semanticscholar.org/paper/paper-001",
+      "abstract": "A study of continuous glucose monitoring in older adults.",
+      "authors": [
+        {
+          "authorId": "author-001",
+          "name": "Jane Smith"
+        },
+        {
+          "authorId": "author-002",
+          "name": "John Doe"
+        }
+      ],
+      "year": 2025,
+      "venue": "Journal of Digital Health",
+      "externalIds": {
+        "DOI": "10.1000/example.001"
+      },
+      "openAccessPdf": {
+        "url": "https://example.org/paper-001.pdf",
+        "status": "GOLD"
+      },
+      "citationCount": 12
+    },
+    {
+      "paperId": "paper-002",
+      "title": "Glycemic Variability and Dietary Change",
+      "url": "https://www.semanticscholar.org/paper/paper-002",
+      "abstract": null,
+      "authors": null,
+      "year": 2024,
+      "venue": null,
+      "externalIds": null,
+      "openAccessPdf": null,
+      "citationCount": 3
+    }
+  ]
+}
