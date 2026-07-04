@@ -40,7 +40,18 @@ class SemanticScholarClient:
             self._http_client.close()
 
     def search(self, query: str, limit: int = 10) -> list[PaperCandidate]:
-        """Search Semantic Scholar and map results to PaperCandidate objects."""
+        """Search and return normalized paper candidates."""
+
+        payload = self.fetch_search_payload(query=query, limit=limit)
+        return self.map_search_payload(payload)
+
+    def fetch_search_payload(
+        self,
+        *,
+        query: str,
+        limit: int = 10,
+    ) -> dict[str, Any]:
+        """Fetch the original Semantic Scholar JSON response."""
 
         cleaned_query = query.strip()
 
@@ -76,6 +87,17 @@ class SemanticScholarClient:
         except ValueError as error:
             raise SemanticScholarResponseError("Semantic Scholar returned invalid JSON.") from error
 
+        if not isinstance(payload, dict):
+            raise SemanticScholarResponseError("Semantic Scholar response must be a JSON object.")
+
+        return payload
+
+    def map_search_payload(
+        self,
+        payload: dict[str, Any],
+    ) -> list[PaperCandidate]:
+        """Map a raw Semantic Scholar payload to validated paper candidates."""
+
         raw_papers = payload.get("data")
 
         if not isinstance(raw_papers, list):
@@ -84,11 +106,26 @@ class SemanticScholarClient:
             )
 
         retrieved_at = datetime.now(UTC)
+        papers: list[PaperCandidate] = []
 
-        return [self._to_paper_candidate(raw_paper, retrieved_at) for raw_paper in raw_papers]
+        for raw_paper in raw_papers:
+            if not isinstance(raw_paper, dict):
+                raise SemanticScholarResponseError(
+                    "Semantic Scholar response contains an invalid paper record."
+                )
+
+            papers.append(
+                self._to_paper_candidate(
+                    raw_paper=raw_paper,
+                    retrieved_at=retrieved_at,
+                )
+            )
+
+        return papers
 
     @staticmethod
     def _to_paper_candidate(
+        *,
         raw_paper: dict[str, Any],
         retrieved_at: datetime,
     ) -> PaperCandidate:
