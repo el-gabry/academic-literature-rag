@@ -59,3 +59,25 @@ def test_rejects_unsafe_source_name(tmp_path) -> None:
             run_id=UUID("12345678-1234-5678-1234-567812345678"),
             payload={"data": []},
         )
+
+
+def test_saves_xml_response_without_changing_content(tmp_path) -> None:
+    store = RawResponseStore(base_dir=tmp_path / "raw")
+
+    xml_content = """<?xml version="1.0" encoding="UTF-8"?>
+<feed>
+  <title>Example arXiv response</title>
+</feed>
+"""
+
+    saved_path = store.save_text(
+        source="arxiv",
+        run_id=UUID("12345678-1234-5678-1234-567812345678"),
+        content=xml_content,
+        extension="xml",
+    )
+
+    assert saved_path.exists()
+    assert saved_path.suffix == ".xml"
+    assert saved_path.parent.name == "arxiv"
+    assert saved_path.read_text(encoding="utf-8") == xml_content
