@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from academic_literature_rag.repositories.canonical_paper_repository import (
+    CanonicalPaperRepository,
+)
 
 import httpx
 import pytest
@@ -24,8 +27,8 @@ from academic_literature_rag.repositories.search_run_repository import (
 from academic_literature_rag.repositories.source_paper_repository import (
     SourcePaperRepository,
 )
-from academic_literature_rag.services.retrieval_service import (
-    SemanticScholarRetrievalService,
+from academic_literature_rag.services.persisted_retrieval_service import (
+    PersistedRetrievalService,
 )
 from academic_literature_rag.storage.raw_response_store import (
     RawResponseStore,
@@ -47,7 +50,7 @@ def build_service(
     raw_directory: Path,
     client: SemanticScholarClient,
 ) -> tuple[
-    SemanticScholarRetrievalService,
+    PersistedRetrievalService,
     SearchRunRepository,
     SourcePaperRepository,
     sessionmaker[Session],
@@ -62,8 +65,9 @@ def build_service(
     search_run_repository = SearchRunRepository(session_factory)
     source_paper_repository = SourcePaperRepository(session_factory)
 
-    service = SemanticScholarRetrievalService(
+    service = PersistedRetrievalService(
         client=client,
+        canonical_paper_repository=CanonicalPaperRepository(session_factory),
         raw_response_store=RawResponseStore(raw_directory),
         search_run_repository=search_run_repository,
         source_paper_repository=source_paper_repository,
