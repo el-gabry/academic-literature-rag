@@ -15,7 +15,10 @@ from academic_literature_rag.models.paper_candidate import PaperCandidate
 class SourcePaperRepository:
     """Persists source-specific paper records and run associations."""
 
-    def __init__(self, session_factory: sessionmaker[Session]) -> None:
+    def __init__(
+        self,
+        session_factory: sessionmaker[Session],
+    ) -> None:
         self._session_factory = session_factory
 
     def save_for_run(
@@ -23,8 +26,10 @@ class SourcePaperRepository:
         *,
         run_id: UUID,
         papers: list[PaperCandidate],
-    ) -> None:
-        """Save papers and link them to one retrieval run."""
+    ) -> list[UUID]:
+        """Save papers, link them to one run, and return source-paper IDs."""
+
+        source_paper_ids: list[UUID] = []
 
         with self._session_factory.begin() as session:
             for result_position, paper in enumerate(papers, start=1):
@@ -59,7 +64,14 @@ class SourcePaperRepository:
                     link.result_position = result_position
                     link.retrieved_at = paper.retrieved_at
 
-    def list_for_run(self, run_id: UUID) -> list[PaperCandidate]:
+                source_paper_ids.append(UUID(record.id))
+
+        return source_paper_ids
+
+    def list_for_run(
+        self,
+        run_id: UUID,
+    ) -> list[PaperCandidate]:
         """Return paper candidates found in one retrieval run."""
 
         statement = (
@@ -95,7 +107,9 @@ class SourcePaperRepository:
         ]
 
     @staticmethod
-    def _create_record(paper: PaperCandidate) -> SourcePaperRecord:
+    def _create_record(
+        paper: PaperCandidate,
+    ) -> SourcePaperRecord:
         return SourcePaperRecord(
             id=str(uuid4()),
             source=paper.source,

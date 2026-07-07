@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
-
+from academic_literature_rag.repositories.canonical_paper_repository import (
+    CanonicalPaperRepository,
+)
 import httpx
 import pytest
 from sqlalchemy import select
@@ -54,6 +56,7 @@ def build_service(
     service = PersistedRetrievalService(
         client=client,
         raw_response_store=RawResponseStore(raw_directory),
+        canonical_paper_repository=CanonicalPaperRepository(session_factory),
         search_run_repository=SearchRunRepository(session_factory),
         source_paper_repository=SourcePaperRepository(session_factory),
     )
@@ -134,6 +137,7 @@ def test_failed_arxiv_search_is_saved_in_sqlite(
         service = PersistedRetrievalService(
             client=client,
             raw_response_store=RawResponseStore(tmp_path / "raw"),
+            canonical_paper_repository=CanonicalPaperRepository(session_factory),
             search_run_repository=SearchRunRepository(session_factory),
             source_paper_repository=SourcePaperRepository(session_factory),
         )
