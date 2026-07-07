@@ -20,7 +20,11 @@ class ArxivResponseError(RuntimeError):
 class ArxivClient:
     """Client responsible only for arXiv paper-search requests."""
 
-    SEARCH_URL = "http://export.arxiv.org/api/query"
+    SEARCH_URL = "https://export.arxiv.org/api/query"
+
+    # Required by PersistedRetrievalService.
+    source_name = "arxiv"
+    raw_extension = "xml"
 
     NAMESPACES = {
         "atom": "http://www.w3.org/2005/Atom",
@@ -43,20 +47,40 @@ class ArxivClient:
 
     def search(
         self,
-        *,
         query: str,
         limit: int = 10,
         start: int = 0,
     ) -> list[PaperCandidate]:
-        """Search arXiv and return validated paper candidates."""
+        """Search arXiv and return normalized paper candidates."""
 
-        feed_xml = self.fetch_search_feed(
+        raw_response = self.fetch_search_feed(
             query=query,
             limit=limit,
             start=start,
         )
 
-        return self.map_search_feed(feed_xml)
+        return self.map_search_feed(raw_response)
+
+    def fetch_raw_response(
+        self,
+        *,
+        query: str,
+        limit: int = 10,
+    ) -> str:
+        """Fetch the original Atom XML response."""
+
+        return self.fetch_search_feed(
+            query=query,
+            limit=limit,
+        )
+
+    def map_raw_response(
+        self,
+        raw_response: str,
+    ) -> list[PaperCandidate]:
+        """Map raw Atom XML into validated paper candidates."""
+
+        return self.map_search_feed(raw_response)
 
     def fetch_search_feed(
         self,
@@ -97,8 +121,11 @@ class ArxivClient:
 
         return response.text
 
-    def map_search_feed(self, feed_xml: str) -> list[PaperCandidate]:
-        """Map an Atom XML response to validated paper candidates."""
+    def map_search_feed(
+        self,
+        feed_xml: str,
+    ) -> list[PaperCandidate]:
+        """Map an Atom XML response into paper candidates."""
 
         try:
             root = ET.fromstring(feed_xml)
@@ -150,8 +177,6 @@ class ArxivClient:
             if author_name.text
         ]
 
-        pdf_url = self._find_pdf_url(entry)
-
         return PaperCandidate(
             source="arxiv",
             source_id=versioned_arxiv_id,
@@ -164,12 +189,18 @@ class ArxivClient:
             venue=self._optional_text(entry, "arxiv:journal_ref"),
             doi=self._optional_text(entry, "arxiv:doi"),
             arxiv_id=arxiv_id,
-            open_access_pdf_url=pdf_url,
+            open_access_pdf_url=self._find_pdf_url(entry),
             citation_count=None,
         )
 
-    def _published_year(self, entry: ET.Element) -> int | None:
-        published_text = self._optional_text(entry, "atom:published")
+    def _published_year(
+        self,
+        entry: ET.Element,
+    ) -> int | None:
+        published_text = self._optional_text(
+            entry,
+            "atom:published",
+        )
 
         if published_text is None:
             return None
@@ -179,7 +210,10 @@ class ArxivClient:
         except ValueError as error:
             raise ArxivResponseError("arXiv returned an invalid published date.") from error
 
-    def _find_pdf_url(self, entry: ET.Element) -> str | None:
+    def _find_pdf_url(
+        self,
+        entry: ET.Element,
+    ) -> str | None:
         for link in entry.findall("atom:link", self.NAMESPACES):
             if link.get("type") == "application/pdf":
                 return link.get("href")
