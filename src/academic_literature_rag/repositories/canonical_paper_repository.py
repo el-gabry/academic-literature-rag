@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from academic_literature_rag.database.models import (
@@ -26,8 +26,12 @@ class CanonicalPaperIntegrityError(RuntimeError):
     """Raised when canonical-paper persistence finds inconsistent records."""
 
 
+class CanonicalPaperMatchConflictError(RuntimeError):
+    """Raised when strong identifiers point to different canonical papers."""
+
+
 class CanonicalPaperRepository:
-    """Persists internal canonical-paper records."""
+    """Persists and safely links internal canonical-paper records."""
 
     def __init__(
         self,
@@ -39,65 +43,69 @@ class CanonicalPaperRepository:
         self,
         source_paper_id: UUID,
     ) -> CanonicalPaper:
-        """Create one canonical paper for a persisted source-paper record.
+        """Create a separate canonical paper for one source paper.
 
-        This method is idempotent. If the source paper already belongs to a
-        canonical paper, that existing canonical paper is returned.
+        This method intentionally does not search for duplicate records.
+        It is retained for explicit creation and migration-style workflows.
         """
 
         with self._session_factory.begin() as session:
-            source_paper = session.get(
-                SourcePaperRecord,
-                str(source_paper_id),
+            source_paper = self._get_source_paper(
+                session=session,
+                source_paper_id=source_paper_id,
             )
 
-            if source_paper is None:
-                raise SourcePaperNotFoundError(f"Source paper does not exist: {source_paper_id}")
-
-            if source_paper.canonical_paper_id is not None:
-                canonical_paper = session.get(
-                    CanonicalPaperRecord,
-                    source_paper.canonical_paper_id,
-                )
-
-                if canonical_paper is None:
-                    raise CanonicalPaperIntegrityError(
-                        "Source paper references a missing canonical paper."
-                    )
-
-                return self._to_model(canonical_paper)
-
-            normalized_title = normalize_title(source_paper.title)
-
-            if normalized_title is None:
-                raise CanonicalPaperIntegrityError("Source paper title cannot be normalized.")
-
-            canonical_paper = CanonicalPaper(
-                title=source_paper.title,
-                normalized_title=normalized_title,
-                doi=normalize_doi(source_paper.doi),
-                arxiv_id=normalize_arxiv_id(source_paper.arxiv_id),
-                authors=list(source_paper.authors_json),
-                publication_year=source_paper.publication_year,
+            linked_record = self._get_linked_canonical_paper(
+                session=session,
+                source_paper=source_paper,
             )
 
-            record = CanonicalPaperRecord(
-                id=str(canonical_paper.canonical_paper_id),
-                title=canonical_paper.title,
-                normalized_title=canonical_paper.normalized_title,
-                doi=canonical_paper.doi,
-                arxiv_id=canonical_paper.arxiv_id,
-                authors_json=canonical_paper.authors,
-                publication_year=canonical_paper.publication_year,
-                created_at=canonical_paper.created_at,
-                updated_at=canonical_paper.updated_at,
+            if linked_record is not None:
+                return self._to_model(linked_record)
+
+            return self._create_and_link(
+                session=session,
+                source_paper=source_paper,
             )
 
-            session.add(record)
+    def link_or_create_for_source_paper(
+        self,
+        source_paper_id: UUID,
+    ) -> CanonicalPaper:
+        """Link a source paper to a strong match or create a new paper.
 
-            source_paper.canonical_paper_id = str(canonical_paper.canonical_paper_id)
+        Automatic linking is allowed only when a normalized DOI or normalized
+        arXiv identifier matches exactly. Titles are never enough on their own.
+        """
 
-            return canonical_paper
+        with self._session_factory.begin() as session:
+            source_paper = self._get_source_paper(
+                session=session,
+                source_paper_id=source_paper_id,
+            )
+
+            linked_record = self._get_linked_canonical_paper(
+                session=session,
+                source_paper=source_paper,
+            )
+
+            if linked_record is not None:
+                return self._to_model(linked_record)
+
+            matching_record = self._find_strong_match(
+                session=session,
+                source_paper=source_paper,
+            )
+
+            if matching_record is not None:
+                source_paper.canonical_paper_id = matching_record.id
+
+                return self._to_model(matching_record)
+
+            return self._create_and_link(
+                session=session,
+                source_paper=source_paper,
+            )
 
     def get(
         self,
@@ -132,6 +140,115 @@ class CanonicalPaperRepository:
             source_paper_ids = session.scalars(statement).all()
 
         return [UUID(source_paper_id) for source_paper_id in source_paper_ids]
+
+    @staticmethod
+    def _get_source_paper(
+        *,
+        session: Session,
+        source_paper_id: UUID,
+    ) -> SourcePaperRecord:
+        source_paper = session.get(
+            SourcePaperRecord,
+            str(source_paper_id),
+        )
+
+        if source_paper is None:
+            raise SourcePaperNotFoundError(f"Source paper does not exist: {source_paper_id}")
+
+        return source_paper
+
+    @staticmethod
+    def _get_linked_canonical_paper(
+        *,
+        session: Session,
+        source_paper: SourcePaperRecord,
+    ) -> CanonicalPaperRecord | None:
+        if source_paper.canonical_paper_id is None:
+            return None
+
+        record = session.get(
+            CanonicalPaperRecord,
+            source_paper.canonical_paper_id,
+        )
+
+        if record is None:
+            raise CanonicalPaperIntegrityError("Source paper references a missing canonical paper.")
+
+        return record
+
+    def _find_strong_match(
+        self,
+        *,
+        session: Session,
+        source_paper: SourcePaperRecord,
+    ) -> CanonicalPaperRecord | None:
+        normalized_doi = normalize_doi(source_paper.doi)
+        normalized_arxiv_id = normalize_arxiv_id(source_paper.arxiv_id)
+
+        conditions = []
+
+        if normalized_doi is not None:
+            conditions.append(CanonicalPaperRecord.doi == normalized_doi)
+
+        if normalized_arxiv_id is not None:
+            conditions.append(CanonicalPaperRecord.arxiv_id == normalized_arxiv_id)
+
+        if not conditions:
+            return None
+
+        statement = select(CanonicalPaperRecord).where(or_(*conditions))
+
+        records = list(session.scalars(statement).all())
+
+        if not records:
+            return None
+
+        unique_record_ids = {record.id for record in records}
+
+        if len(unique_record_ids) > 1:
+            raise CanonicalPaperMatchConflictError(
+                "Strong identifiers point to different canonical papers."
+            )
+
+        return records[0]
+
+    def _create_and_link(
+        self,
+        *,
+        session: Session,
+        source_paper: SourcePaperRecord,
+    ) -> CanonicalPaper:
+        normalized_title = normalize_title(source_paper.title)
+
+        if normalized_title is None:
+            raise CanonicalPaperIntegrityError("Source paper title cannot be normalized.")
+
+        canonical_paper = CanonicalPaper(
+            title=source_paper.title,
+            normalized_title=normalized_title,
+            doi=normalize_doi(source_paper.doi),
+            arxiv_id=normalize_arxiv_id(source_paper.arxiv_id),
+            authors=list(source_paper.authors_json),
+            publication_year=source_paper.publication_year,
+        )
+
+        record = CanonicalPaperRecord(
+            id=str(canonical_paper.canonical_paper_id),
+            title=canonical_paper.title,
+            normalized_title=canonical_paper.normalized_title,
+            doi=canonical_paper.doi,
+            arxiv_id=canonical_paper.arxiv_id,
+            authors_json=canonical_paper.authors,
+            publication_year=canonical_paper.publication_year,
+            created_at=canonical_paper.created_at,
+            updated_at=canonical_paper.updated_at,
+        )
+
+        session.add(record)
+
+        source_paper.canonical_paper_id = str(canonical_paper.canonical_paper_id)
+
+        return canonical_paper
 
     @staticmethod
     def _to_model(

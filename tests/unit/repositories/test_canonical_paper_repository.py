@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-
 from pathlib import Path
 from uuid import UUID, uuid4
 
+import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -17,6 +17,7 @@ from academic_literature_rag.database.session import (
     create_sqlite_engine,
 )
 from academic_literature_rag.repositories.canonical_paper_repository import (
+    CanonicalPaperMatchConflictError,
     CanonicalPaperRepository,
 )
 
@@ -27,6 +28,8 @@ def build_repository(
     CanonicalPaperRepository,
     sessionmaker[Session],
 ]:
+    """Create an isolated SQLite repository for one test."""
+
     engine = create_sqlite_engine(database_path)
     create_schema(engine)
 
@@ -37,25 +40,31 @@ def build_repository(
 
 def create_source_paper(
     *,
-    session_factory: object,
+    session_factory: sessionmaker[Session],
     source: str,
     source_id: str,
     title: str,
     doi: str | None = None,
     arxiv_id: str | None = None,
 ) -> UUID:
+    """Insert one source-paper record directly for repository tests."""
+
     source_paper_id = uuid4()
 
     with session_factory.begin() as session:
         session.add(
             SourcePaperRecord(
                 id=str(source_paper_id),
+                canonical_paper_id=None,
                 source=source,
                 source_id=source_id,
                 title=title,
                 landing_url=f"https://example.org/{source}/{source_id}",
                 abstract="Example abstract.",
-                authors_json=["A. Researcher", "B. Scientist"],
+                authors_json=[
+                    "A. Researcher",
+                    "B. Scientist",
+                ],
                 publication_year=2026,
                 venue=None,
                 doi=doi,
@@ -127,7 +136,7 @@ def test_create_for_source_paper_is_idempotent(
     assert record_count == 1
 
 
-def test_this_phase_does_not_merge_distinct_source_papers_yet(
+def test_explicit_create_does_not_merge_distinct_source_papers(
     tmp_path: Path,
 ) -> None:
     repository, session_factory = build_repository(tmp_path / "academic_literature_rag.db")
@@ -157,3 +166,132 @@ def test_this_phase_does_not_merge_distinct_source_papers_yet(
         record_count = session.scalar(select(func.count()).select_from(CanonicalPaperRecord))
 
     assert record_count == 2
+
+
+def test_same_doi_links_source_papers_to_one_canonical_paper(
+    tmp_path: Path,
+) -> None:
+    repository, session_factory = build_repository(tmp_path / "academic_literature_rag.db")
+
+    first_source_paper_id = create_source_paper(
+        session_factory=session_factory,
+        source="semantic_scholar",
+        source_id="semantic-1",
+        title="Shared Research Paper",
+        doi="https://doi.org/10.1000/SHARED.123",
+    )
+
+    first_canonical_paper = repository.link_or_create_for_source_paper(first_source_paper_id)
+
+    second_source_paper_id = create_source_paper(
+        session_factory=session_factory,
+        source="arxiv",
+        source_id="2302.01204v1",
+        title="A Different Formatting of the Same Paper",
+        doi="doi:10.1000/shared.123",
+    )
+
+    second_canonical_paper = repository.link_or_create_for_source_paper(second_source_paper_id)
+
+    assert second_canonical_paper.canonical_paper_id == first_canonical_paper.canonical_paper_id
+
+    assert set(repository.list_source_paper_ids(first_canonical_paper.canonical_paper_id)) == {
+        first_source_paper_id,
+        second_source_paper_id,
+    }
+
+
+def test_same_arxiv_id_links_source_papers_to_one_canonical_paper(
+    tmp_path: Path,
+) -> None:
+    repository, session_factory = build_repository(tmp_path / "academic_literature_rag.db")
+
+    first_source_paper_id = create_source_paper(
+        session_factory=session_factory,
+        source="semantic_scholar",
+        source_id="semantic-1",
+        title="Change Point Detection",
+        arxiv_id="arXiv:2302.01204v2",
+    )
+
+    first_canonical_paper = repository.link_or_create_for_source_paper(first_source_paper_id)
+
+    second_source_paper_id = create_source_paper(
+        session_factory=session_factory,
+        source="arxiv",
+        source_id="2302.01204v1",
+        title="Change-Point Detection",
+        arxiv_id="2302.01204v1",
+    )
+
+    second_canonical_paper = repository.link_or_create_for_source_paper(second_source_paper_id)
+
+    assert second_canonical_paper.canonical_paper_id == first_canonical_paper.canonical_paper_id
+
+    assert set(repository.list_source_paper_ids(first_canonical_paper.canonical_paper_id)) == {
+        first_source_paper_id,
+        second_source_paper_id,
+    }
+
+
+def test_same_title_without_strong_identifier_does_not_auto_link(
+    tmp_path: Path,
+) -> None:
+    repository, session_factory = build_repository(tmp_path / "academic_literature_rag.db")
+
+    first_source_paper_id = create_source_paper(
+        session_factory=session_factory,
+        source="semantic_scholar",
+        source_id="semantic-1",
+        title="A Shared Paper Title",
+    )
+
+    first_canonical_paper = repository.link_or_create_for_source_paper(first_source_paper_id)
+
+    second_source_paper_id = create_source_paper(
+        session_factory=session_factory,
+        source="arxiv",
+        source_id="2302.01204v1",
+        title="A Shared Paper Title",
+    )
+
+    second_canonical_paper = repository.link_or_create_for_source_paper(second_source_paper_id)
+
+    assert second_canonical_paper.canonical_paper_id != first_canonical_paper.canonical_paper_id
+
+
+def test_conflicting_strong_identifiers_raise_an_error(
+    tmp_path: Path,
+) -> None:
+    repository, session_factory = build_repository(tmp_path / "academic_literature_rag.db")
+
+    doi_source_paper_id = create_source_paper(
+        session_factory=session_factory,
+        source="semantic_scholar",
+        source_id="semantic-doi",
+        title="DOI Paper",
+        doi="10.1000/doi-paper",
+    )
+
+    arxiv_source_paper_id = create_source_paper(
+        session_factory=session_factory,
+        source="arxiv",
+        source_id="2302.01204v1",
+        title="arXiv Paper",
+        arxiv_id="2302.01204v1",
+    )
+
+    repository.link_or_create_for_source_paper(doi_source_paper_id)
+    repository.link_or_create_for_source_paper(arxiv_source_paper_id)
+
+    conflicting_source_paper_id = create_source_paper(
+        session_factory=session_factory,
+        source="semantic_scholar",
+        source_id="semantic-conflict",
+        title="Conflicting Paper",
+        doi="10.1000/doi-paper",
+        arxiv_id="2302.01204v2",
+    )
+
+    with pytest.raises(CanonicalPaperMatchConflictError):
+        repository.link_or_create_for_source_paper(conflicting_source_paper_id)
