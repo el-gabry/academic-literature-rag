@@ -39,8 +39,44 @@ class SearchRunRecord(Base):
     status: Mapped[str] = mapped_column(String(20), nullable=False)
     result_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
-    raw_response_path: Mapped[str | None] = mapped_column(Text, nullable=True)
-    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    raw_response_path: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+    error_message: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+
+class CanonicalPaperRecord(Base):
+    """Internal unified representation of one academic paper."""
+
+    __tablename__ = "canonical_papers"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    normalized_title: Mapped[str] = mapped_column(Text, nullable=False)
+
+    doi: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    arxiv_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+    authors_json: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+
+    publication_year: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
 
 
 class SourcePaperRecord(Base):
@@ -57,6 +93,15 @@ class SourcePaperRecord(Base):
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
+
+    canonical_paper_id: Mapped[str | None] = mapped_column(
+        ForeignKey(
+            "canonical_papers.id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+        index=True,
+    )
 
     source: Mapped[str] = mapped_column(String(50), nullable=False)
     source_id: Mapped[str] = mapped_column(String(255), nullable=False)
