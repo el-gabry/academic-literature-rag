@@ -149,3 +149,66 @@ class SearchRunPaperRecord(Base):
         DateTime(timezone=True),
         nullable=False,
     )
+
+
+class PdfAssetRecord(Base):
+    """Tracks one PDF candidate or downloaded PDF file."""
+
+    __tablename__ = "pdf_assets"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "canonical_paper_id",
+            "source_url",
+            name="uq_pdf_assets_canonical_paper_source_url",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+
+    canonical_paper_id: Mapped[str] = mapped_column(
+        ForeignKey("canonical_papers.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    source_paper_id: Mapped[str | None] = mapped_column(
+        ForeignKey("source_papers.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    source_url: Mapped[str] = mapped_column(Text, nullable=False)
+
+    download_status: Mapped[str] = mapped_column(
+        String(30),
+        nullable=False,
+    )
+
+    local_file_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    sha256_checksum: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+    )
+    content_type: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+    )
+    file_size_bytes: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+    failure_message: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+    downloaded_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
