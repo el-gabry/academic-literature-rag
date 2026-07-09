@@ -212,3 +212,40 @@ class PdfAssetRecord(Base):
         DateTime(timezone=True),
         nullable=True,
     )
+
+
+class PdfPageTextRecord(Base):
+    """Stores extracted text for one page of a downloaded PDF."""
+
+    __tablename__ = "pdf_page_texts"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "pdf_asset_id",
+            "page_number",
+            name="uq_pdf_page_texts_pdf_asset_page_number",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+
+    pdf_asset_id: Mapped[str] = mapped_column(
+        ForeignKey("pdf_assets.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    page_number: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    text: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
