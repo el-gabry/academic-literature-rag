@@ -15,6 +15,9 @@ from academic_literature_rag.database.session import (
     create_session_factory,
     create_sqlite_engine,
 )
+from academic_literature_rag.repositories.pdf_asset_repository import (
+    PdfAssetRepository,
+)
 from academic_literature_rag.models.paper_candidate import PaperCandidate
 from academic_literature_rag.repositories.canonical_paper_repository import (
     CanonicalPaperRepository,
@@ -146,6 +149,7 @@ def test_retrieval_automatically_links_same_doi_to_one_canonical_paper(
     semantic_scholar_service = PersistedRetrievalService(
         client=semantic_scholar_client,
         raw_response_store=RawResponseStore(tmp_path / "raw"),
+        pdf_asset_repository=PdfAssetRepository(session_factory),
         search_run_repository=search_run_repository,
         source_paper_repository=source_paper_repository,
         canonical_paper_repository=canonical_paper_repository,
@@ -153,6 +157,7 @@ def test_retrieval_automatically_links_same_doi_to_one_canonical_paper(
 
     arxiv_service = PersistedRetrievalService(
         client=arxiv_client,
+        pdf_asset_repository=PdfAssetRepository(session_factory),
         raw_response_store=RawResponseStore(tmp_path / "raw"),
         search_run_repository=search_run_repository,
         source_paper_repository=source_paper_repository,

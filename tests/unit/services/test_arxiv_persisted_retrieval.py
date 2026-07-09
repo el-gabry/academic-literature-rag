@@ -8,6 +8,9 @@ import httpx
 import pytest
 from sqlalchemy import select
 
+from academic_literature_rag.repositories.pdf_asset_repository import (
+    PdfAssetRepository,
+)
 from academic_literature_rag.connectors.arxiv import (
     ArxivClient,
     ArxivRequestError,
@@ -56,6 +59,7 @@ def build_service(
     service = PersistedRetrievalService(
         client=client,
         raw_response_store=RawResponseStore(raw_directory),
+        pdf_asset_repository=PdfAssetRepository(session_factory),
         canonical_paper_repository=CanonicalPaperRepository(session_factory),
         search_run_repository=SearchRunRepository(session_factory),
         source_paper_repository=SourcePaperRepository(session_factory),
@@ -137,6 +141,7 @@ def test_failed_arxiv_search_is_saved_in_sqlite(
         service = PersistedRetrievalService(
             client=client,
             raw_response_store=RawResponseStore(tmp_path / "raw"),
+            pdf_asset_repository=PdfAssetRepository(session_factory),
             canonical_paper_repository=CanonicalPaperRepository(session_factory),
             search_run_repository=SearchRunRepository(session_factory),
             source_paper_repository=SourcePaperRepository(session_factory),
