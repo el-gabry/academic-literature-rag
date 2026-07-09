@@ -164,6 +164,28 @@ class PdfAssetRepository:
 
         return self._to_model(record)
 
+    def list_pending(
+        self,
+        *,
+        limit: int | None = None,
+    ) -> list[PdfAsset]:
+        """Return pending PDF assets ordered by creation time."""
+
+        if limit is not None and limit < 1:
+            raise ValueError("Pending PDF asset limit must be at least 1.")
+        statement = (
+            select(PdfAssetRecord)
+            .where(PdfAssetRecord.download_status == "pending")
+            .order_by(PdfAssetRecord.created_at)
+        )
+        if limit is not None:
+            statement = statement.limit(limit)
+
+        with self._session_factory() as session:
+            records = session.scalars(statement).all()
+
+        return [self._to_model(record) for record in records]
+
     def list_for_canonical_paper(
         self,
         canonical_paper_id: UUID,
