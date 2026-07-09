@@ -249,3 +249,55 @@ class PdfPageTextRecord(Base):
         DateTime(timezone=True),
         nullable=False,
     )
+
+
+class TextChunkRecord(Base):
+    """Stores clean text chunks ready for embedding and retrieval."""
+
+    __tablename__ = "text_chunks"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "pdf_asset_id",
+            "chunk_index",
+            name="uq_text_chunks_pdf_asset_chunk_index",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+
+    pdf_asset_id: Mapped[str] = mapped_column(
+        ForeignKey("pdf_assets.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    chunk_index: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    start_page_number: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    end_page_number: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    text: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    char_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
