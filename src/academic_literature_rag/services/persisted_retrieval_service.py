@@ -3,10 +3,14 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from academic_literature_rag.connectors.protocols import PaperSourceClient
+from academic_literature_rag.models.paper_candidate import PaperCandidate
 from academic_literature_rag.models.retrieval_result import RetrievalResult
 from academic_literature_rag.models.search_run import SearchRun
 from academic_literature_rag.repositories.canonical_paper_repository import (
     CanonicalPaperRepository,
+)
+from academic_literature_rag.repositories.pdf_asset_repository import (
+    PdfAssetRepository,
 )
 from academic_literature_rag.repositories.search_run_repository import (
     SearchRunRepository,
@@ -18,7 +22,7 @@ from academic_literature_rag.storage.raw_response_store import RawResponseStore
 
 
 class PersistedRetrievalService:
-    """Coordinates a persisted retrieval workflow for any paper source."""
+    """Coordinates retrieval, persistence, canonicalization, and PDF registration."""
 
     def __init__(
         self,
@@ -28,12 +32,14 @@ class PersistedRetrievalService:
         search_run_repository: SearchRunRepository,
         source_paper_repository: SourcePaperRepository,
         canonical_paper_repository: CanonicalPaperRepository,
+        pdf_asset_repository: PdfAssetRepository,
     ) -> None:
         self._client = client
         self._raw_response_store = raw_response_store
         self._search_run_repository = search_run_repository
         self._source_paper_repository = source_paper_repository
         self._canonical_paper_repository = canonical_paper_repository
+        self._pdf_asset_repository = pdf_asset_repository
 
     def search(
         self,
@@ -41,7 +47,7 @@ class PersistedRetrievalService:
         query: str,
         limit: int = 10,
     ) -> RetrievalResult:
-        """Retrieve, persist, and safely canonicalize paper records."""
+        """Retrieve, persist, canonicalize, and register PDF candidates."""
 
         run = SearchRun(
             source=self._client.source_name,
@@ -70,8 +76,10 @@ class PersistedRetrievalService:
                 papers=papers,
             )
 
-            for source_paper_id in source_paper_ids:
-                self._canonical_paper_repository.link_or_create_for_source_paper(source_paper_id)
+            self._register_canonical_papers_and_pdf_assets(
+                papers=papers,
+                source_paper_ids=source_paper_ids,
+            )
 
             run.status = "completed"
             run.completed_at = datetime.now(UTC)
@@ -93,3 +101,29 @@ class PersistedRetrievalService:
             self._search_run_repository.save(run)
 
             raise
+
+    def _register_canonical_papers_and_pdf_assets(
+        self,
+        *,
+        papers: list[PaperCandidate],
+        source_paper_ids: list,
+    ) -> None:
+        """Link source papers to canonical records and register PDF URLs."""
+
+        for paper, source_paper_id in zip(
+            papers,
+            source_paper_ids,
+            strict=True,
+        ):
+            canonical_paper = self._canonical_paper_repository.link_or_create_for_source_paper(
+                source_paper_id
+            )
+
+            if paper.open_access_pdf_url is None:
+                continue
+
+            self._pdf_asset_repository.create_or_get_pending(
+                canonical_paper_id=canonical_paper.canonical_paper_id,
+                source_paper_id=source_paper_id,
+                source_url=paper.open_access_pdf_url,
+            )

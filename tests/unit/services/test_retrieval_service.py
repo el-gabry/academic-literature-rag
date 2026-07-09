@@ -33,6 +33,9 @@ from academic_literature_rag.services.persisted_retrieval_service import (
 from academic_literature_rag.storage.raw_response_store import (
     RawResponseStore,
 )
+from academic_literature_rag.repositories.pdf_asset_repository import (
+    PdfAssetRepository,
+)
 
 
 FIXTURE_PATH = Path(__file__).parents[2] / "fixtures" / "semantic_scholar_search.json"
@@ -68,6 +71,7 @@ def build_service(
     service = PersistedRetrievalService(
         client=client,
         canonical_paper_repository=CanonicalPaperRepository(session_factory),
+        pdf_asset_repository=PdfAssetRepository(session_factory),
         raw_response_store=RawResponseStore(raw_directory),
         search_run_repository=search_run_repository,
         source_paper_repository=source_paper_repository,
