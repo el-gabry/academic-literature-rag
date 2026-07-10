@@ -301,3 +301,46 @@ class TextChunkRecord(Base):
         DateTime(timezone=True),
         nullable=False,
     )
+
+
+class ChunkEmbeddingRecord(Base):
+    """Stores embedding vectors generated for text chunks."""
+
+    __tablename__ = "chunk_embeddings"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "text_chunk_id",
+            "embedding_model",
+            name="uq_chunk_embeddings_text_chunk_model",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+
+    text_chunk_id: Mapped[str] = mapped_column(
+        ForeignKey("text_chunks.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    embedding_model: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        index=True,
+    )
+
+    embedding_vector_json: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    embedding_dimension: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
