@@ -185,6 +185,79 @@ def test_create_or_replace_replaces_existing_embedding_for_same_model(
     assert all_embeddings == [second_embedding]
 
 
+def test_list_by_model_returns_all_embeddings_for_model(
+    tmp_path: Path,
+) -> None:
+    repository, session_factory = build_repository(tmp_path / "academic_literature_rag.db")
+
+    first_text_chunk_id = create_text_chunk(
+        session_factory=session_factory,
+        chunk_index=0,
+        text="First chunk.",
+    )
+
+    second_text_chunk_id = create_text_chunk(
+        session_factory=session_factory,
+        chunk_index=1,
+        text="Second chunk.",
+    )
+
+    third_text_chunk_id = create_text_chunk(
+        session_factory=session_factory,
+        chunk_index=2,
+        text="Third chunk.",
+    )
+
+    first_embedding = ChunkEmbedding(
+        text_chunk_id=first_text_chunk_id,
+        embedding_model="target-model",
+        embedding_vector=[0.1, 0.2, 0.3],
+        embedding_dimension=3,
+    )
+
+    second_embedding = ChunkEmbedding(
+        text_chunk_id=second_text_chunk_id,
+        embedding_model="target-model",
+        embedding_vector=[0.4, 0.5, 0.6],
+        embedding_dimension=3,
+    )
+
+    other_model_embedding = ChunkEmbedding(
+        text_chunk_id=third_text_chunk_id,
+        embedding_model="other-model",
+        embedding_vector=[0.7, 0.8, 0.9],
+        embedding_dimension=3,
+    )
+
+    repository.create_or_replace(first_embedding)
+    repository.create_or_replace(other_model_embedding)
+    repository.create_or_replace(second_embedding)
+
+    embeddings = repository.list_by_model("target-model")
+
+    assert embeddings == [
+        first_embedding,
+        second_embedding,
+    ]
+
+
+def test_list_by_model_returns_empty_list_when_model_has_no_embeddings(
+    tmp_path: Path,
+) -> None:
+    repository, _session_factory = build_repository(tmp_path / "academic_literature_rag.db")
+
+    assert repository.list_by_model("missing-model") == []
+
+
+def test_list_by_model_rejects_empty_model_name(
+    tmp_path: Path,
+) -> None:
+    repository, _session_factory = build_repository(tmp_path / "academic_literature_rag.db")
+
+    with pytest.raises(ValueError, match="Embedding model cannot be empty"):
+        repository.list_by_model("   ")
+
+
 def test_list_for_text_chunk_returns_all_models(
     tmp_path: Path,
 ) -> None:
