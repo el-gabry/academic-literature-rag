@@ -64,6 +64,23 @@ class TextChunkRepository:
 
         return chunks
 
+    def get(
+        self,
+        text_chunk_id: UUID,
+    ) -> TextChunk | None:
+        """Return one text chunk by ID."""
+
+        with self._session_factory() as session:
+            record = session.get(
+                TextChunkRecord,
+                str(text_chunk_id),
+            )
+
+        if record is None:
+            return None
+
+        return self._to_model(record)
+
     def list_for_pdf_asset(
         self,
         pdf_asset_id: UUID,

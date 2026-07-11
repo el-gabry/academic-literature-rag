@@ -100,6 +100,25 @@ class ChunkEmbeddingRepository:
 
         return [self._to_embedding_model(record) for record in records]
 
+    def list_by_model(
+        self,
+        embedding_model: str,
+    ) -> list[ChunkEmbedding]:
+        """Return all embeddings stored for one embedding model."""
+
+        normalized_model = self._normalize_embedding_model(embedding_model)
+
+        statement = (
+            select(ChunkEmbeddingRecord)
+            .where(ChunkEmbeddingRecord.embedding_model == normalized_model)
+            .order_by(ChunkEmbeddingRecord.created_at)
+        )
+
+        with self._session_factory() as session:
+            records = session.scalars(statement).all()
+
+        return [self._to_embedding_model(record) for record in records]
+
     def list_text_chunks_without_embedding(
         self,
         *,
