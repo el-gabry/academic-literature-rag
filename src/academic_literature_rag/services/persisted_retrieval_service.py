@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from urllib.parse import urlparse
 
 from academic_literature_rag.connectors.protocols import PaperSourceClient
 from academic_literature_rag.models.paper_candidate import PaperCandidate
@@ -108,18 +109,23 @@ class PersistedRetrievalService:
         papers: list[PaperCandidate],
         source_paper_ids: list,
     ) -> None:
-        """Link source papers to canonical records and register PDF URLs."""
+        """Link source papers to canonical records and register direct PDF URLs."""
 
         for paper, source_paper_id in zip(
             papers,
             source_paper_ids,
             strict=True,
         ):
-            canonical_paper = self._canonical_paper_repository.link_or_create_for_source_paper(
-                source_paper_id
+            canonical_paper = (
+                self._canonical_paper_repository.link_or_create_for_source_paper(
+                    source_paper_id
+                )
             )
 
             if paper.open_access_pdf_url is None:
+                continue
+
+            if not self._is_direct_pdf_candidate(paper.open_access_pdf_url):
                 continue
 
             self._pdf_asset_repository.create_or_get_pending(
@@ -127,3 +133,26 @@ class PersistedRetrievalService:
                 source_paper_id=source_paper_id,
                 source_url=paper.open_access_pdf_url,
             )
+
+    @staticmethod
+    def _is_direct_pdf_candidate(url: str) -> bool:
+        """Return whether a URL is likely to be a downloadable PDF."""
+
+        cleaned_url = url.strip()
+
+        if not cleaned_url:
+            return False
+
+        parsed_url = urlparse(cleaned_url)
+        hostname = parsed_url.hostname or ""
+        path = parsed_url.path.lower()
+
+        if hostname == "doi.org" or hostname.endswith(".doi.org"):
+            return False
+
+        return (
+            path.endswith(".pdf")
+            or "/pdf/" in path
+            or hostname == "arxiv.org"
+            and path.startswith("/pdf/")
+        )
