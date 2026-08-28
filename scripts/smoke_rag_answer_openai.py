@@ -15,7 +15,9 @@ from academic_literature_rag.repositories.chunk_embedding_repository import (
 from academic_literature_rag.repositories.text_chunk_repository import (
     TextChunkRepository,
 )
-from academic_literature_rag.services.embedding_client import EmbeddingResponse
+from academic_literature_rag.services.openai_embedding_client import (
+    OpenAIEmbeddingClient,
+)
 from academic_literature_rag.services.openai_generation_client import (
     OpenAIGenerationClient,
 )
@@ -30,58 +32,20 @@ from academic_literature_rag.services.semantic_search_service import (
 )
 
 
-class SmokeEmbeddingClient:
-    """Deterministic embedding client matching smoke_rag_pipeline.py."""
-
-    @property
-    def model_name(
-        self,
-    ) -> str:
-        """Return the smoke embedding model name."""
-
-        return "smoke-deterministic-embedding"
-
-    def embed_text(
-        self,
-        text: str,
-    ) -> EmbeddingResponse:
-        """Return a deterministic vector without calling an external API."""
-
-        return EmbeddingResponse(
-            model=self.model_name,
-            vector=self._build_vector(text),
-        )
-
-    @staticmethod
-    def _build_vector(
-        text: str,
-    ) -> list[float]:
-        """Create a stable tiny vector from text content."""
-
-        cleaned_text = text.strip()
-
-        if not cleaned_text:
-            return [0.0] * 8
-
-        buckets = [0.0] * 8
-
-        for index, character in enumerate(cleaned_text):
-            buckets[index % len(buckets)] += float(ord(character) % 101)
-
-        total = sum(buckets) or 1.0
-
-        return [value / total for value in buckets]
-
-
 def main() -> None:
-    """Run one OpenAI-backed grounded-answer smoke test."""
+    """Run one fully OpenAI-backed grounded-answer smoke test."""
 
     ensure_openai_api_key_exists()
 
     database_path = Path("data/db/dev.db")
     question = "What is attention in transformers?"
     top_k = 3
-    model_name = os.getenv(
+
+    embedding_model = os.getenv(
+        "OPENAI_EMBEDDING_MODEL",
+        "text-embedding-3-small",
+    )
+    generation_model = os.getenv(
         "OPENAI_GENERATION_MODEL",
         "gpt-4o-mini",
     )
@@ -92,11 +56,14 @@ def main() -> None:
 
     chunk_embedding_repository = ChunkEmbeddingRepository(session_factory)
     text_chunk_repository = TextChunkRepository(session_factory)
-    embedding_client = SmokeEmbeddingClient()
 
-    ensure_smoke_embeddings_exist(
+    ensure_openai_embeddings_exist(
         chunk_embedding_repository=chunk_embedding_repository,
-        embedding_model=embedding_client.model_name,
+        embedding_model=embedding_model,
+    )
+
+    embedding_client = OpenAIEmbeddingClient(
+        model_name=embedding_model,
     )
 
     semantic_search_service = SemanticSearchService(
@@ -109,7 +76,7 @@ def main() -> None:
         semantic_search_service=semantic_search_service,
         rag_prompt_builder=RagPromptBuilder(),
         generation_client=OpenAIGenerationClient(
-            model_name=model_name,
+            model_name=generation_model,
         ),
     )
 
@@ -118,7 +85,10 @@ def main() -> None:
         top_k=top_k,
     )
 
-    print_answer(answer)
+    print_answer(
+        answer=answer,
+        embedding_model=embedding_model,
+    )
 
 
 def ensure_openai_api_key_exists() -> None:
@@ -133,12 +103,12 @@ def ensure_openai_api_key_exists() -> None:
     )
 
 
-def ensure_smoke_embeddings_exist(
+def ensure_openai_embeddings_exist(
     *,
     chunk_embedding_repository: ChunkEmbeddingRepository,
     embedding_model: str,
 ) -> None:
-    """Fail clearly if the ingestion smoke has not run yet."""
+    """Fail clearly if real OpenAI embeddings have not been created yet."""
 
     embeddings = chunk_embedding_repository.list_by_model(embedding_model)
 
@@ -146,17 +116,19 @@ def ensure_smoke_embeddings_exist(
         return
 
     raise RuntimeError(
-        "No smoke embeddings found. Run this first:\n"
-        "uv run python scripts/smoke_rag_pipeline.py"
+        f"No embeddings found for model '{embedding_model}'. Run this first:\n"
+        "uv run python scripts/smoke_rag_pipeline_openai_embeddings.py"
     )
 
 
 def print_answer(
+    *,
     answer: GroundedAnswer,
+    embedding_model: str,
 ) -> None:
     """Print a readable grounded answer summary."""
 
-    print("OpenAI RAG answer smoke run completed.")
+    print("Fully OpenAI RAG answer smoke run completed.")
     print()
     print("Question")
     print(f"- {answer.question}")
@@ -164,6 +136,10 @@ def print_answer(
     print()
     print("Answer")
     print(answer.answer)
+
+    print()
+    print("Retrieval")
+    print(f"- Embedding model: {embedding_model}")
 
     print()
     print("Generation")
