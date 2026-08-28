@@ -6,7 +6,7 @@
 
 It retrieves academic papers, persists metadata, downloads open-access PDFs, extracts and chunks text, generates embeddings, performs semantic search, and produces grounded answers with citations.
 
-This project demonstrates an end-to-end AI engineering workflow for literature-based question answering.
+The project demonstrates an end-to-end AI engineering workflow for literature-based question answering.
 
 ---
 
@@ -26,6 +26,8 @@ This project demonstrates an end-to-end AI engineering workflow for literature-b
 - Service factory / dependency composition layer
 - Command-line interface
 - Text, JSON, and Markdown output formats
+- Output file support
+- Text and JSON logging
 - Unit tests and GitHub Actions CI
 
 ---
@@ -88,6 +90,7 @@ src/academic_literature_rag/
   app/
     demo_output.py
     factory.py
+    logging_config.py
 
   connectors/
     arxiv.py
@@ -146,7 +149,7 @@ Environment-driven settings are centralized in:
 src/academic_literature_rag/config.py
 ```
 
-This keeps API keys, model names, paths, and demo limits out of individual scripts.
+This keeps API keys, model names, storage paths, and demo limits out of individual scripts.
 
 ### Service factory
 
@@ -166,7 +169,7 @@ The project exposes a command-line interface:
 uv run academic-literature-rag --help
 ```
 
-### Structured outputs
+### Structured output
 
 The demo supports multiple output formats:
 
@@ -176,7 +179,29 @@ uv run academic-literature-rag demo --format json
 uv run academic-literature-rag demo --format markdown
 ```
 
-This makes the project useful for terminal demos, automation, and report generation.
+### Output files
+
+Rendered demo output can be written directly to a file:
+
+```bash
+uv run academic-literature-rag demo \
+  --format markdown \
+  --output-file _tmp/demo_output.md
+```
+
+### Structured logging
+
+Logs can be written as text or JSON:
+
+```bash
+uv run academic-literature-rag demo \
+  --log-level INFO \
+  --log-format json
+```
+
+Logs are written to `stderr`, while rendered demo output is written to `stdout` or to the selected `--output-file`.
+
+This keeps JSON and Markdown outputs clean for automation and reporting.
 
 ---
 
@@ -284,13 +309,19 @@ arXiv retrieval
 
 ## CLI Usage
 
-Show help:
+Show root help:
 
 ```bash
 uv run academic-literature-rag --help
 ```
 
-Run the demo:
+Show demo help:
+
+```bash
+uv run academic-literature-rag demo --help
+```
+
+Run the default demo:
 
 ```bash
 uv run academic-literature-rag demo
@@ -314,12 +345,33 @@ Run with Markdown output:
 uv run academic-literature-rag demo --format markdown
 ```
 
-Save output:
+Write JSON output directly to a file:
 
 ```bash
-uv run academic-literature-rag demo --format json > demo_output.json
-uv run academic-literature-rag demo --format markdown > demo_output.md
+uv run academic-literature-rag demo \
+  --format json \
+  --output-file _tmp/demo_output.json
 ```
+
+Write Markdown output directly to a file:
+
+```bash
+uv run academic-literature-rag demo \
+  --format markdown \
+  --output-file _tmp/demo_output.md
+```
+
+Use structured JSON logs while saving Markdown output:
+
+```bash
+uv run academic-literature-rag demo \
+  --format markdown \
+  --output-file _tmp/demo_output.md \
+  --log-level INFO \
+  --log-format json
+```
+
+Logs are written to `stderr`, while rendered demo output is written to `stdout` or to the selected `--output-file`.
 
 ---
 
@@ -409,9 +461,24 @@ uv run pytest tests/unit/services/test_openai_generation_client.py
 uv run pytest tests/unit/services/test_openai_embedding_client.py
 uv run pytest tests/unit/app/test_factory.py
 uv run pytest tests/unit/app/test_demo_output.py
+uv run pytest tests/unit/app/test_logging_config.py
+uv run pytest tests/unit/test_cli_output_file.py
+uv run pytest tests/integration/test_cli.py
 ```
 
 OpenAI client tests use fake SDK clients and do not call the real OpenAI API.
+
+---
+
+## CI
+
+GitHub Actions runs automated checks on pushes and pull requests:
+
+```text
+uv sync
+ruff check .
+pytest
+```
 
 ---
 
@@ -476,7 +543,10 @@ Typed configuration
 Service factory
 CLI demo command
 Text / JSON / Markdown outputs
+Output file support
+Text / JSON logging
 GitHub Actions CI
+Unit and integration tests
 ```
 
 The project is currently a working engineering MVP with a production-style structure.
@@ -502,8 +572,11 @@ Dependency injection
 Typed configuration
 CLI development
 Structured output design
+Structured logging
 Unit testing
+Integration testing
 CI workflow setup
+Safe configuration management
 ```
 
 ---
