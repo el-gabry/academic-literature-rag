@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 from collections.abc import Sequence
 from typing import NoReturn, cast
@@ -11,10 +12,18 @@ from academic_literature_rag.app.demo_output import (
     render_demo_output,
 )
 from academic_literature_rag.app.factory import RagServiceFactory
+from academic_literature_rag.app.logging_config import (
+    SUPPORTED_LOG_FORMATS,
+    LogFormat,
+    LoggingConfigError,
+    configure_logging,
+)
 from academic_literature_rag.config import AppConfig, ConfigError
 from academic_literature_rag.repositories.chunk_embedding_repository import (
     ChunkEmbeddingRepository,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def main(
@@ -31,13 +40,18 @@ def main(
                 output_format=cast(
                     DemoOutputFormat,
                     args.output_format,
-                )
+                ),
+                log_level=args.log_level,
+                log_format=cast(
+                    LogFormat,
+                    args.log_format,
+                ),
             )
 
         parser.print_help()
         return 0
 
-    except ConfigError as error:
+    except (ConfigError, LoggingConfigError) as error:
         print_error(str(error))
         return 2
 
@@ -72,6 +86,19 @@ def build_parser() -> argparse.ArgumentParser:
         default="text",
         help="Output format for the demo result.",
     )
+    demo_parser.add_argument(
+        "--log-level",
+        dest="log_level",
+        default="INFO",
+        help="Logging level, for example DEBUG, INFO, WARNING, or ERROR.",
+    )
+    demo_parser.add_argument(
+        "--log-format",
+        dest="log_format",
+        choices=SUPPORTED_LOG_FORMATS,
+        default="text",
+        help="Logging format.",
+    )
     demo_parser.set_defaults(
         command="demo",
     )
@@ -82,15 +109,29 @@ def build_parser() -> argparse.ArgumentParser:
 def run_demo_command(
     *,
     output_format: DemoOutputFormat,
+    log_level: str,
+    log_format: LogFormat,
 ) -> int:
     """Run the full OpenAI-backed RAG demo."""
 
+    configure_logging(
+        log_level=log_level,
+        log_format=log_format,
+    )
+
+    logger.info("Loading application configuration.")
     config = AppConfig.from_env()
+
+    logger.info("Creating application services.")
     factory = RagServiceFactory.from_config(config)
 
     try:
         pipeline_service = factory.create_pipeline_service()
 
+        logger.info(
+            "Starting RAG ingestion for query: %s",
+            config.demo.search_query,
+        )
         ingestion_result = pipeline_service.ingest(
             query=config.demo.search_query,
             retrieval_limit=config.demo.retrieval_limit,
@@ -98,11 +139,16 @@ def run_demo_command(
             embedding_limit=config.demo.embedding_limit,
         )
 
+        logger.info("Checking embedded chunks.")
         ensure_embeddings_exist(
             chunk_embedding_repository=factory.repositories.chunk_embedding_repository,
             embedding_model=config.openai.embedding_model,
         )
 
+        logger.info(
+            "Generating grounded answer for question: %s",
+            config.demo.question,
+        )
         answer_service = factory.create_answer_service()
 
         answer = answer_service.answer(
@@ -111,8 +157,10 @@ def run_demo_command(
         )
 
     finally:
+        logger.info("Closing application services.")
         factory.close()
 
+    logger.info("Rendering demo output as %s.", output_format)
     output = render_demo_output(
         search_query=config.demo.search_query,
         question=config.demo.question,
@@ -125,6 +173,7 @@ def run_demo_command(
 
     print(output)
 
+    logger.info("Demo completed successfully.")
     return 0
 
 
@@ -138,6 +187,11 @@ def ensure_embeddings_exist(
     embeddings = chunk_embedding_repository.list_by_model(embedding_model)
 
     if embeddings:
+        logger.info(
+            "Found %s embeddings for model %s.",
+            len(embeddings),
+            embedding_model,
+        )
         return
 
     raise RuntimeError(
