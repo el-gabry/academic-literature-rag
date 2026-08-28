@@ -27,6 +27,10 @@ from academic_literature_rag.repositories.chunk_embedding_repository import (
 logger = logging.getLogger(__name__)
 
 
+class OutputFileError(ValueError):
+    """Raised when demo output cannot be written to the requested path."""
+
+
 def main(
     argv: Sequence[str] | None = None,
 ) -> int:
@@ -53,7 +57,7 @@ def main(
         parser.print_help()
         return 0
 
-    except (ConfigError, LoggingConfigError) as error:
+    except (ConfigError, LoggingConfigError, OutputFileError) as error:
         print_error(str(error))
         return 2
 
@@ -201,14 +205,25 @@ def write_demo_output(
         print(output)
         return
 
-    output_file.parent.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
-    output_file.write_text(
-        output,
-        encoding="utf-8",
-    )
+    if output_file.exists() and output_file.is_dir():
+        raise OutputFileError(
+            f"Output file path points to a directory: {output_file}"
+        )
+
+    try:
+        output_file.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+        output_file.write_text(
+            output,
+            encoding="utf-8",
+        )
+
+    except OSError as error:
+        raise OutputFileError(
+            f"Could not write demo output to {output_file}: {error}"
+        ) from error
 
     logger.info(
         "Demo output written to %s.",
