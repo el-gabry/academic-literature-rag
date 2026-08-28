@@ -1,22 +1,42 @@
 # Academic Literature RAG
 
-**Academic Literature RAG** is a research-oriented Retrieval-Augmented Generation system for academic papers.
+[![CI](https://github.com/el-gabry/academic-literature-rag/actions/workflows/ci.yml/badge.svg)](https://github.com/el-gabry/academic-literature-rag/actions/workflows/ci.yml)
 
-It searches academic sources, persists paper metadata, downloads open-access PDFs, extracts and chunks text, generates embeddings, performs semantic search, and produces grounded answers with citations.
+**Academic Literature RAG** is a production-style Retrieval-Augmented Generation pipeline for academic papers.
 
-The project is designed as both:
+It retrieves academic papers, persists metadata, downloads open-access PDFs, extracts and chunks text, generates embeddings, performs semantic search, and produces grounded answers with citations.
 
-1. A practical engineering MVP for literature-based RAG.
-2. A foundation for research experiments on retrieval quality, grounding, citation faithfulness, and scientific question answering.
+This project demonstrates an end-to-end AI engineering workflow for literature-based question answering.
 
 ---
 
-## Current Status
+## Highlights
 
-The project currently supports a working end-to-end RAG flow:
+- Academic paper retrieval from arXiv and Semantic Scholar
+- Fallback retrieval strategy
+- Persistent storage for search runs, source papers, canonical papers, PDF assets, extracted text, chunks, and embeddings
+- Open-access PDF download and validation
+- Page-level PDF text extraction
+- Text cleaning and chunking with page range tracking
+- OpenAI embedding integration
+- Semantic search over embedded chunks
+- OpenAI grounded answer generation
+- Citation objects linked to retrieved evidence
+- Typed environment configuration
+- Service factory / dependency composition layer
+- Command-line interface
+- Text, JSON, and Markdown output formats
+- Unit tests and GitHub Actions CI
+
+---
+
+## System Overview
+
+High-level flow:
 
 ```text
-paper search
+paper query
+→ paper retrieval
 → metadata persistence
 → PDF registration
 → PDF download
@@ -25,187 +45,18 @@ paper search
 → chunking
 → embedding generation
 → semantic search
-→ evidence prompt building
-→ grounded answer generation
-→ citations
+→ prompt construction
+→ answer generation
+→ grounded citations
 ```
 
-Implemented:
-
-- arXiv retrieval
-- Semantic Scholar retrieval
-- fallback paper search
-- raw API response persistence
-- search run persistence
-- source paper persistence
-- canonical paper linking
-- PDF asset tracking
-- pending PDF download pipeline
-- PDF validation
-- page-level PDF text extraction
-- text cleaning
-- chunking
-- embedding persistence
-- semantic search over embedded chunks
-- grounded answer generation
-- citation objects linked to retrieved chunks
-- pipeline orchestration service
-- deterministic local smoke scripts
-- OpenAI generation client
-- OpenAI embedding client
-- OpenAI-backed smoke scripts
-- one end-to-end OpenAI RAG demo script
-
----
-
-## Why This Project Exists
-
-Academic literature workflows often require more than simple keyword search.
-
-Researchers need to:
-
-- find relevant papers,
-- inspect evidence inside PDFs,
-- ask questions across papers,
-- trace answers back to source passages,
-- compare retrieval strategies,
-- evaluate grounding quality,
-- and build reproducible research pipelines.
-
-This project focuses on building a transparent and testable RAG pipeline where every stage is inspectable:
-
-```text
-source response
-→ persisted record
-→ downloaded PDF
-→ extracted pages
-→ chunks
-→ embeddings
-→ retrieved evidence
-→ generated answer
-→ citations
-```
-
----
-
-## Core Capabilities
-
-### Paper Retrieval
-
-The project retrieves paper candidates from academic sources.
-
-Current sources:
-
-- arXiv
-- Semantic Scholar
-
-It also includes a fallback paper search service that can try a primary source first and fall back to another source when the primary source fails or returns no usable results.
-
----
-
-### Persistence Layer
-
-The project stores intermediate artifacts instead of treating retrieval as a temporary API call.
-
-Persisted entities include:
-
-- search runs
-- source papers
-- canonical papers
-- PDF assets
-- page-level extracted text
-- text chunks
-- chunk embeddings
-
-This makes the pipeline reproducible, debuggable, and easier to evaluate.
-
----
-
-### PDF Processing
-
-The PDF pipeline supports:
-
-- registering open-access PDF assets,
-- downloading pending PDF assets,
-- validating downloaded files,
-- storing local PDF paths,
-- extracting page-level text,
-- normalizing extracted text,
-- and persisting page text for later chunking.
-
----
-
-### Chunking
-
-Extracted PDF text is cleaned and converted into retrieval-ready chunks.
-
-The chunking stage keeps page number information, which allows later answers to cite the retrieved evidence with page ranges.
-
----
-
-### Embeddings
-
-The project supports two embedding modes:
-
-1. **Deterministic smoke embeddings**  
-   Used for local development and tests without external API calls.
-
-2. **OpenAI embeddings**  
-   Used for real semantic retrieval.
-
-Default OpenAI embedding model:
-
-```text
-text-embedding-3-small
-```
-
-This can be changed with:
-
-```bash
-OPENAI_EMBEDDING_MODEL
-```
-
----
-
-### Semantic Search
-
-The semantic search service:
-
-1. embeds the user query,
-2. loads stored chunk embeddings for the same model,
-3. computes cosine similarity,
-4. ranks chunks,
-5. returns the top retrieved evidence chunks.
-
----
-
-### Grounded Answer Generation
-
-The RAG answer service:
-
-1. retrieves semantically relevant chunks,
-2. builds an evidence-only prompt,
-3. sends the prompt to a generation client,
-4. returns a grounded answer,
-5. attaches citations for the retrieved chunks.
-
-Default OpenAI generation model:
-
-```text
-gpt-4o-mini
-```
-
-This can be changed with:
-
-```bash
-OPENAI_GENERATION_MODEL
-```
+The pipeline keeps intermediate artifacts so each stage can be inspected, tested, and reused.
 
 ---
 
 ## Architecture
 
-High-level architecture:
+The project is organized into clear layers:
 
 ```text
 connectors
@@ -216,7 +67,7 @@ repositories
   ↓
 PDF services
   ↓
-text services
+text processing
   ↓
 embedding services
   ↓
@@ -229,10 +80,14 @@ generation client
 grounded answer
 ```
 
-Main project structure:
+Main package structure:
 
 ```text
 src/academic_literature_rag/
+
+  app/
+    demo_output.py
+    factory.py
 
   connectors/
     arxiv.py
@@ -243,55 +98,85 @@ src/academic_literature_rag/
     models.py
     session.py
 
-  identity/
-    matching.py
-    normalizers.py
-
   models/
-    canonical_paper.py
-    chunk_embedding.py
     paper_candidate.py
     pdf_asset.py
     pdf_page_text.py
-    rag_answer.py
-    retrieval_result.py
-    search_run.py
-    semantic_search_result.py
     text_chunk.py
+    chunk_embedding.py
+    retrieval_result.py
+    rag_answer.py
+    semantic_search_result.py
 
   repositories/
-    canonical_paper_repository.py
-    chunk_embedding_repository.py
-    pdf_asset_repository.py
-    pdf_page_text_repository.py
     search_run_repository.py
     source_paper_repository.py
+    canonical_paper_repository.py
+    pdf_asset_repository.py
+    pdf_page_text_repository.py
     text_chunk_repository.py
-
-  retrieval/
-    vector_math.py
+    chunk_embedding_repository.py
 
   services/
-    chunk_embedding_service.py
-    embedding_client.py
-    fallback_paper_search_service.py
-    generation_client.py
-    openai_embedding_client.py
-    openai_generation_client.py
-    pdf_download_service.py
-    pdf_text_extraction_service.py
-    pending_pdf_download_service.py
     persisted_retrieval_service.py
+    fallback_paper_search_service.py
+    pdf_download_service.py
+    pending_pdf_download_service.py
+    pdf_text_extraction_service.py
+    text_cleaning_service.py
+    text_chunking_service.py
+    chunk_embedding_service.py
+    semantic_search_service.py
+    rag_prompt_builder.py
     rag_answer_service.py
     rag_pipeline_service.py
-    rag_prompt_builder.py
-    semantic_search_service.py
-    text_chunking_service.py
-    text_cleaning_service.py
-
-  storage/
-    raw_response_store.py
+    openai_embedding_client.py
+    openai_generation_client.py
 ```
+
+---
+
+## Engineering Design
+
+### Typed configuration
+
+Environment-driven settings are centralized in:
+
+```text
+src/academic_literature_rag/config.py
+```
+
+This keeps API keys, model names, paths, and demo limits out of individual scripts.
+
+### Service factory
+
+Application wiring is centralized in:
+
+```text
+src/academic_literature_rag/app/factory.py
+```
+
+The factory builds repositories, clients, pipeline services, and answer services from a single configuration object.
+
+### CLI interface
+
+The project exposes a command-line interface:
+
+```bash
+uv run academic-literature-rag --help
+```
+
+### Structured outputs
+
+The demo supports multiple output formats:
+
+```bash
+uv run academic-literature-rag demo --format text
+uv run academic-literature-rag demo --format json
+uv run academic-literature-rag demo --format markdown
+```
+
+This makes the project useful for terminal demos, automation, and report generation.
 
 ---
 
@@ -299,7 +184,7 @@ src/academic_literature_rag/
 
 - Python 3.12+
 - uv
-- OpenAI API key for OpenAI-backed scripts
+- OpenAI API key for OpenAI-backed demos
 - Optional Semantic Scholar API key
 
 ---
@@ -309,7 +194,7 @@ src/academic_literature_rag/
 Clone the repository:
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/el-gabry/academic-literature-rag.git
 cd academic-literature-rag
 ```
 
@@ -319,7 +204,7 @@ Install dependencies:
 uv sync
 ```
 
-Run tests:
+Run checks:
 
 ```bash
 uv run ruff check .
@@ -330,16 +215,16 @@ uv run pytest
 
 ## Environment Setup
 
-Create a local environment file:
+Copy the example environment file:
 
 ```bash
 cp .env.example .env
 ```
 
-Then fill in:
+Set your OpenAI key:
 
 ```bash
-OPENAI_API_KEY=your-key-here
+export OPENAI_API_KEY='your-key-here'
 ```
 
 Main environment variables:
@@ -371,11 +256,11 @@ Never commit real API keys.
 
 ## Quick Start
 
-### Run the full OpenAI-backed end-to-end demo
+Run the full OpenAI-backed demo:
 
 ```bash
 export OPENAI_API_KEY='your-key-here'
-uv run python scripts/demo_rag_end_to_end.py
+uv run academic-literature-rag demo
 ```
 
 Expected output starts with:
@@ -397,7 +282,48 @@ arXiv retrieval
 
 ---
 
-## Demo Configuration
+## CLI Usage
+
+Show help:
+
+```bash
+uv run academic-literature-rag --help
+```
+
+Run the demo:
+
+```bash
+uv run academic-literature-rag demo
+```
+
+Run with text output:
+
+```bash
+uv run academic-literature-rag demo --format text
+```
+
+Run with JSON output:
+
+```bash
+uv run academic-literature-rag demo --format json
+```
+
+Run with Markdown output:
+
+```bash
+uv run academic-literature-rag demo --format markdown
+```
+
+Save output:
+
+```bash
+uv run academic-literature-rag demo --format json > demo_output.json
+uv run academic-literature-rag demo --format markdown > demo_output.md
+```
+
+---
+
+## Customizing the Demo
 
 Change the paper search query:
 
@@ -411,7 +337,7 @@ Change the question:
 export RAG_DEMO_QUESTION="How is retrieval used in medical image analysis?"
 ```
 
-Change limits:
+Change retrieval limits:
 
 ```bash
 export RAG_DEMO_RETRIEVAL_LIMIT=3
@@ -420,95 +346,48 @@ export RAG_DEMO_EMBEDDING_LIMIT=10
 export RAG_DEMO_TOP_K=5
 ```
 
-Run the demo:
+Run:
 
 ```bash
-uv run python scripts/demo_rag_end_to_end.py
+uv run academic-literature-rag demo --format markdown
 ```
 
 ---
 
-## Development Smoke Scripts
+## Development Scripts
 
-The repository includes smaller smoke scripts for debugging individual stages.
+The CLI is the preferred interface. Smaller smoke scripts are also available for debugging individual stages.
 
-### Local Ingestion Smoke
-
-Uses arXiv retrieval and deterministic local embeddings.
+### Local ingestion smoke
 
 ```bash
 uv run python scripts/smoke_rag_pipeline.py
 ```
 
-Validates:
-
-```text
-retrieval
-→ PDF registration
-→ PDF download
-→ text extraction
-→ chunking
-→ deterministic embedding persistence
-```
-
----
-
-### Local Answer Smoke
-
-Uses deterministic local embeddings and deterministic fake generation.
+### Local answer smoke
 
 ```bash
 uv run python scripts/smoke_rag_answer.py
 ```
 
-Validates:
-
-```text
-semantic search
-→ prompt building
-→ generation interface
-→ grounded answer with citations
-```
-
----
-
-### OpenAI Answer Smoke
-
-Uses OpenAI generation for grounded answer generation.
+### OpenAI answer smoke
 
 ```bash
 export OPENAI_API_KEY='your-key-here'
 uv run python scripts/smoke_rag_answer_openai.py
 ```
 
-Validates:
-
-```text
-semantic search
-→ prompt building
-→ OpenAI generation
-→ grounded answer with citations
-```
-
----
-
-### OpenAI Embedding Pipeline Smoke
-
-Uses OpenAI embeddings during ingestion.
+### OpenAI embedding pipeline smoke
 
 ```bash
 export OPENAI_API_KEY='your-key-here'
 uv run python scripts/smoke_rag_pipeline_openai_embeddings.py
 ```
 
-Validates:
+### End-to-end demo script
 
-```text
-retrieval
-→ PDF processing
-→ chunking
-→ OpenAI embeddings
-→ embedding persistence
+```bash
+uv run python scripts/demo_rag_end_to_end.py
 ```
 
 ---
@@ -522,26 +401,23 @@ uv run ruff check .
 uv run pytest
 ```
 
-Run a single test file:
+Run selected tests:
 
 ```bash
 uv run pytest tests/unit/services/test_rag_answer_service.py
-```
-
-Run OpenAI client tests:
-
-```bash
 uv run pytest tests/unit/services/test_openai_generation_client.py
 uv run pytest tests/unit/services/test_openai_embedding_client.py
+uv run pytest tests/unit/app/test_factory.py
+uv run pytest tests/unit/app/test_demo_output.py
 ```
 
-OpenAI client unit tests use fake SDK clients. They do not call the real OpenAI API.
+OpenAI client tests use fake SDK clients and do not call the real OpenAI API.
 
 ---
 
 ## Generated Local Artifacts
 
-The project writes local development artifacts under:
+Local development artifacts are written under:
 
 ```text
 data/db/dev.db
@@ -549,23 +425,13 @@ data/raw_responses/
 data/pdfs/
 ```
 
-Temporary command outputs can be stored under:
+Temporary outputs can be stored under:
 
 ```text
 _tmp/
 ```
 
-These should not be committed.
-
-Ignored local artifacts should include:
-
-```text
-.env
-data/
-_tmp/
-.venv/
-__pycache__/
-```
+These files are ignored by Git and should not be committed.
 
 ---
 
@@ -578,7 +444,7 @@ Do not commit:
 OPENAI_API_KEY
 local SQLite databases
 downloaded PDFs
-raw response dumps
+raw API responses
 temporary outputs
 ```
 
@@ -586,67 +452,59 @@ Use `.env.example` for safe configuration documentation.
 
 ---
 
-## Current Limitations
+## Current Status
 
-The project is a working engineering MVP, but it is not yet a full research evaluation framework.
+Implemented:
 
-Current limitations:
+```text
+Retrieval connectors
+Fallback retrieval
+Persistence layer
+PDF asset tracking
+PDF download and validation
+PDF text extraction
+Text cleaning and chunking
+Embedding persistence
+OpenAI embedding client
+Semantic search
+Prompt builder
+OpenAI generation client
+Grounded answer service
+Citation objects
+Pipeline orchestration
+Typed configuration
+Service factory
+CLI demo command
+Text / JSON / Markdown outputs
+GitHub Actions CI
+```
 
-- No retrieval benchmark yet
-- No citation faithfulness evaluation yet
-- No answer faithfulness evaluation yet
-- No reranking layer yet
-- No hybrid retrieval yet
-- No CLI package entry point yet
-- No web interface or API server yet
-- No experiment tracking yet
-- No paper-level formatted bibliography output yet
-- No systematic comparison against baseline retrieval methods yet
-
----
-
-## Roadmap
-
-### Near-term Engineering Milestones
-
-- Add CLI entry point
-- Add typed configuration object
-- Improve demo output formatting
-- Add JSON output option
-- Add Markdown report output option
-- Add better error messages for missing local artifacts
-- Add reusable pipeline factory to reduce script duplication
-
-### Research Milestones
-
-- Build a small evaluation dataset
-- Add retrieval precision and recall metrics
-- Add citation grounding checks
-- Add answer faithfulness evaluation
-- Add benchmark questions
-- Compare semantic retrieval against keyword retrieval
-- Add hybrid retrieval
-- Add reranking
-- Evaluate chunk size and overlap sensitivity
-- Evaluate different embedding models
-- Evaluate different generation models
+The project is currently a working engineering MVP with a production-style structure.
 
 ---
 
-## Intended Research Direction
+## Skills Demonstrated
 
-This repository can support experiments around:
+This project demonstrates:
 
-- scientific literature RAG,
-- grounded academic question answering,
-- citation-aware generation,
-- retrieval quality evaluation,
-- PDF-based evidence extraction,
-- chunking strategies,
-- embedding model comparison,
-- and answer faithfulness analysis.
-
-The long-term goal is to move from a working RAG pipeline to a reproducible research framework for academic literature retrieval and grounded generation.
+```text
+Retrieval-Augmented Generation
+LLM application engineering
+OpenAI API integration
+PDF processing
+Semantic search
+Embedding pipelines
+SQL persistence
+Repository pattern
+Service-layer architecture
+Factory pattern
+Dependency injection
+Typed configuration
+CLI development
+Structured output design
+Unit testing
+CI workflow setup
+```
 
 ---
 
@@ -656,6 +514,6 @@ Add a license before public release.
 
 Recommended options:
 
-- MIT for permissive open-source release
-- Apache-2.0 for permissive release with explicit patent terms
-- Private repository if the project is still under active research development
+- MIT
+- Apache-2.0
+- Private repository while under active development
