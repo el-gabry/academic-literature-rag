@@ -4,6 +4,7 @@ import argparse
 import logging
 import sys
 from collections.abc import Sequence
+from pathlib import Path
 from typing import NoReturn, cast
 
 from academic_literature_rag.app.demo_output import (
@@ -41,6 +42,7 @@ def main(
                     DemoOutputFormat,
                     args.output_format,
                 ),
+                output_file=args.output_file,
                 log_level=args.log_level,
                 log_format=cast(
                     LogFormat,
@@ -87,6 +89,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Output format for the demo result.",
     )
     demo_parser.add_argument(
+        "--output-file",
+        dest="output_file",
+        type=Path,
+        default=None,
+        help="Optional file path where the rendered demo output should be saved.",
+    )
+    demo_parser.add_argument(
         "--log-level",
         dest="log_level",
         default="INFO",
@@ -109,6 +118,7 @@ def build_parser() -> argparse.ArgumentParser:
 def run_demo_command(
     *,
     output_format: DemoOutputFormat,
+    output_file: Path | None,
     log_level: str,
     log_format: LogFormat,
 ) -> int:
@@ -171,10 +181,39 @@ def run_demo_command(
         output_format=output_format,
     )
 
-    print(output)
+    write_demo_output(
+        output=output,
+        output_file=output_file,
+    )
 
     logger.info("Demo completed successfully.")
     return 0
+
+
+def write_demo_output(
+    *,
+    output: str,
+    output_file: Path | None,
+) -> None:
+    """Write rendered demo output to stdout or to a file."""
+
+    if output_file is None:
+        print(output)
+        return
+
+    output_file.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+    output_file.write_text(
+        output,
+        encoding="utf-8",
+    )
+
+    logger.info(
+        "Demo output written to %s.",
+        output_file,
+    )
 
 
 def ensure_embeddings_exist(
