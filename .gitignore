@@ -223,3 +223,6 @@ _tmp/
 
 # Local RAG artifacts
 data/
+
+# Local environment variables
+.env
