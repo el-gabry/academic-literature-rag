@@ -13,7 +13,7 @@ dependencies = [
 ]
 
 [project.scripts]
-academic-literature-rag = "academic_literature_rag:main"
+academic-literature-rag = "academic_literature_rag.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.11.26,<0.12.0"]

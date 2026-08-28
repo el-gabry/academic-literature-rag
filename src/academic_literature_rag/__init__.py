@@ -1,2 +1,2 @@
 def main() -> None:
-    print("Hello from academic-literature-rag!")
+    print("""Academic Literature RAG package.""")
