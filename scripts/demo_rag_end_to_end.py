@@ -1,273 +1,51 @@
 from __future__ import annotations
 
-import os
-from pathlib import Path
-
-from academic_literature_rag.connectors.arxiv import ArxivClient
-from academic_literature_rag.database.session import (
-    create_schema,
-    create_session_factory,
-    create_sqlite_engine,
-)
+from academic_literature_rag.app.factory import RagServiceFactory
+from academic_literature_rag.config import AppConfig
 from academic_literature_rag.models.rag_answer import GroundedAnswer
-from academic_literature_rag.repositories.canonical_paper_repository import (
-    CanonicalPaperRepository,
-)
 from academic_literature_rag.repositories.chunk_embedding_repository import (
     ChunkEmbeddingRepository,
 )
-from academic_literature_rag.repositories.pdf_asset_repository import (
-    PdfAssetRepository,
-)
-from academic_literature_rag.repositories.pdf_page_text_repository import (
-    PdfPageTextRepository,
-)
-from academic_literature_rag.repositories.search_run_repository import (
-    SearchRunRepository,
-)
-from academic_literature_rag.repositories.source_paper_repository import (
-    SourcePaperRepository,
-)
-from academic_literature_rag.repositories.text_chunk_repository import (
-    TextChunkRepository,
-)
-from academic_literature_rag.services.chunk_embedding_service import (
-    ChunkEmbeddingService,
-)
-from academic_literature_rag.services.openai_embedding_client import (
-    OpenAIEmbeddingClient,
-)
-from academic_literature_rag.services.openai_generation_client import (
-    OpenAIGenerationClient,
-)
-from academic_literature_rag.services.pdf_download_service import (
-    PdfDownloadService,
-)
-from academic_literature_rag.services.pdf_text_extraction_service import (
-    PdfTextExtractionService,
-)
-from academic_literature_rag.services.pending_pdf_download_service import (
-    PendingPdfDownloadService,
-)
-from academic_literature_rag.services.persisted_retrieval_service import (
-    PersistedRetrievalService,
-)
-from academic_literature_rag.services.rag_answer_service import (
-    RagAnswerService,
-)
-from academic_literature_rag.services.rag_pipeline_service import (
-    RagPipelineService,
-)
-from academic_literature_rag.services.rag_prompt_builder import (
-    RagPromptBuilder,
-)
-from academic_literature_rag.services.semantic_search_service import (
-    SemanticSearchService,
-)
-from academic_literature_rag.services.text_chunking_service import (
-    TextChunkingService,
-)
-from academic_literature_rag.services.text_cleaning_service import (
-    TextCleaningService,
-)
-from academic_literature_rag.storage.raw_response_store import RawResponseStore
 
 
 def main() -> None:
     """Run one full RAG demo with real OpenAI embeddings and generation."""
 
-    ensure_openai_api_key_exists()
-
-    search_query = os.getenv(
-        "RAG_DEMO_SEARCH_QUERY",
-        "transformer attention",
-    )
-    question = os.getenv(
-        "RAG_DEMO_QUESTION",
-        "What is attention in transformers?",
-    )
-
-    retrieval_limit = int(
-        os.getenv(
-            "RAG_DEMO_RETRIEVAL_LIMIT",
-            "2",
-        )
-    )
-    download_limit = int(
-        os.getenv(
-            "RAG_DEMO_DOWNLOAD_LIMIT",
-            "1",
-        )
-    )
-    embedding_limit = int(
-        os.getenv(
-            "RAG_DEMO_EMBEDDING_LIMIT",
-            "8",
-        )
-    )
-    top_k = int(
-        os.getenv(
-            "RAG_DEMO_TOP_K",
-            "3",
-        )
-    )
-
-    embedding_model = os.getenv(
-        "OPENAI_EMBEDDING_MODEL",
-        "text-embedding-3-small",
-    )
-    generation_model = os.getenv(
-        "OPENAI_GENERATION_MODEL",
-        "gpt-4o-mini",
-    )
-
-    database_path = Path(
-        os.getenv(
-            "RAG_DEMO_DATABASE_PATH",
-            "data/db/dev.db",
-        )
-    )
-    raw_response_dir = Path(
-        os.getenv(
-            "RAG_DEMO_RAW_RESPONSE_DIR",
-            "data/raw_responses",
-        )
-    )
-    pdf_dir = Path(
-        os.getenv(
-            "RAG_DEMO_PDF_DIR",
-            "data/pdfs",
-        )
-    )
-
-    database_path.parent.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
-    raw_response_dir.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
-    pdf_dir.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
-
-    engine = create_sqlite_engine(database_path)
-    create_schema(engine)
-    session_factory = create_session_factory(engine)
-
-    search_run_repository = SearchRunRepository(session_factory)
-    source_paper_repository = SourcePaperRepository(session_factory)
-    canonical_paper_repository = CanonicalPaperRepository(session_factory)
-    pdf_asset_repository = PdfAssetRepository(session_factory)
-    pdf_page_text_repository = PdfPageTextRepository(session_factory)
-    text_chunk_repository = TextChunkRepository(session_factory)
-    chunk_embedding_repository = ChunkEmbeddingRepository(session_factory)
-
-    embedding_client = OpenAIEmbeddingClient(
-        model_name=embedding_model,
-    )
-
-    arxiv_client = ArxivClient()
-    pdf_download_service = PdfDownloadService(
-        pdf_asset_repository=pdf_asset_repository,
-        pdf_storage_directory=pdf_dir,
-    )
+    config = AppConfig.from_env()
+    factory = RagServiceFactory.from_config(config)
 
     try:
-        persisted_retrieval_service = PersistedRetrievalService(
-            client=arxiv_client,
-            raw_response_store=RawResponseStore(raw_response_dir),
-            search_run_repository=search_run_repository,
-            source_paper_repository=source_paper_repository,
-            canonical_paper_repository=canonical_paper_repository,
-            pdf_asset_repository=pdf_asset_repository,
-        )
-
-        pending_pdf_download_service = PendingPdfDownloadService(
-            pdf_asset_repository=pdf_asset_repository,
-            pdf_download_service=pdf_download_service,
-        )
-
-        pdf_text_extraction_service = PdfTextExtractionService(
-            pdf_asset_repository=pdf_asset_repository,
-            pdf_page_text_repository=pdf_page_text_repository,
-        )
-
-        text_chunking_service = TextChunkingService(
-            pdf_page_text_repository=pdf_page_text_repository,
-            text_chunk_repository=text_chunk_repository,
-            text_cleaning_service=TextCleaningService(),
-        )
-
-        chunk_embedding_service = ChunkEmbeddingService(
-            chunk_embedding_repository=chunk_embedding_repository,
-            embedding_client=embedding_client,
-        )
-
-        pipeline_service = RagPipelineService(
-            persisted_retrieval_service=persisted_retrieval_service,
-            pending_pdf_download_service=pending_pdf_download_service,
-            pdf_text_extraction_service=pdf_text_extraction_service,
-            text_chunking_service=text_chunking_service,
-            chunk_embedding_service=chunk_embedding_service,
-        )
+        pipeline_service = factory.create_pipeline_service()
 
         ingestion_result = pipeline_service.ingest(
-            query=search_query,
-            retrieval_limit=retrieval_limit,
-            download_limit=download_limit,
-            embedding_limit=embedding_limit,
+            query=config.demo.search_query,
+            retrieval_limit=config.demo.retrieval_limit,
+            download_limit=config.demo.download_limit,
+            embedding_limit=config.demo.embedding_limit,
         )
 
         ensure_embeddings_exist(
-            chunk_embedding_repository=chunk_embedding_repository,
-            embedding_model=embedding_model,
+            chunk_embedding_repository=factory.repositories.chunk_embedding_repository,
+            embedding_model=config.openai.embedding_model,
         )
 
-        semantic_search_service = SemanticSearchService(
-            chunk_embedding_repository=chunk_embedding_repository,
-            text_chunk_repository=text_chunk_repository,
-            embedding_client=embedding_client,
-        )
+        answer_service = factory.create_answer_service()
 
-        rag_answer_service = RagAnswerService(
-            semantic_search_service=semantic_search_service,
-            rag_prompt_builder=RagPromptBuilder(),
-            generation_client=OpenAIGenerationClient(
-                model_name=generation_model,
-            ),
-        )
-
-        answer = rag_answer_service.answer(
-            question,
-            top_k=top_k,
+        answer = answer_service.answer(
+            config.demo.question,
+            top_k=config.demo.top_k,
         )
 
     finally:
-        close_if_available(arxiv_client)
-        close_if_available(pdf_download_service)
+        factory.close()
 
     print_demo_result(
-        search_query=search_query,
-        question=question,
-        embedding_model=embedding_model,
-        generation_model=generation_model,
+        search_query=config.demo.search_query,
+        question=config.demo.question,
+        embedding_model=config.openai.embedding_model,
+        generation_model=config.openai.generation_model,
         ingestion_result=ingestion_result,
         answer=answer,
-    )
-
-
-def ensure_openai_api_key_exists() -> None:
-    """Fail early if OPENAI_API_KEY is missing."""
-
-    if os.getenv("OPENAI_API_KEY"):
-        return
-
-    raise RuntimeError(
-        "OPENAI_API_KEY is not set. Set it before running this script:\n"
-        "export OPENAI_API_KEY='your-key-here'"
     )
 
 
@@ -288,21 +66,6 @@ def ensure_embeddings_exist(
         "Try increasing RAG_DEMO_RETRIEVAL_LIMIT, RAG_DEMO_DOWNLOAD_LIMIT, "
         "or RAG_DEMO_EMBEDDING_LIMIT."
     )
-
-
-def close_if_available(
-    value: object,
-) -> None:
-    """Close clients/services that expose a close method."""
-
-    close_method = getattr(
-        value,
-        "close",
-        None,
-    )
-
-    if callable(close_method):
-        close_method()
 
 
 def print_demo_result(
