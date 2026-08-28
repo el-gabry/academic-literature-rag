@@ -3,11 +3,15 @@ from __future__ import annotations
 import argparse
 import sys
 from collections.abc import Sequence
-from typing import NoReturn
+from typing import NoReturn, cast
 
+from academic_literature_rag.app.demo_output import (
+    SUPPORTED_DEMO_OUTPUT_FORMATS,
+    DemoOutputFormat,
+    render_demo_output,
+)
 from academic_literature_rag.app.factory import RagServiceFactory
 from academic_literature_rag.config import AppConfig, ConfigError
-from academic_literature_rag.models.rag_answer import GroundedAnswer
 from academic_literature_rag.repositories.chunk_embedding_repository import (
     ChunkEmbeddingRepository,
 )
@@ -23,7 +27,12 @@ def main(
 
     try:
         if args.command == "demo":
-            return run_demo_command()
+            return run_demo_command(
+                output_format=cast(
+                    DemoOutputFormat,
+                    args.output_format,
+                )
+            )
 
         parser.print_help()
         return 0
@@ -56,6 +65,13 @@ def build_parser() -> argparse.ArgumentParser:
         "demo",
         help="Run the full OpenAI-backed end-to-end RAG demo.",
     )
+    demo_parser.add_argument(
+        "--format",
+        dest="output_format",
+        choices=SUPPORTED_DEMO_OUTPUT_FORMATS,
+        default="text",
+        help="Output format for the demo result.",
+    )
     demo_parser.set_defaults(
         command="demo",
     )
@@ -63,7 +79,10 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def run_demo_command() -> int:
+def run_demo_command(
+    *,
+    output_format: DemoOutputFormat,
+) -> int:
     """Run the full OpenAI-backed RAG demo."""
 
     config = AppConfig.from_env()
@@ -94,14 +113,17 @@ def run_demo_command() -> int:
     finally:
         factory.close()
 
-    print_demo_result(
+    output = render_demo_output(
         search_query=config.demo.search_query,
         question=config.demo.question,
         embedding_model=config.openai.embedding_model,
         generation_model=config.openai.generation_model,
         ingestion_result=ingestion_result,
         answer=answer,
+        output_format=output_format,
     )
+
+    print(output)
 
     return 0
 
@@ -123,88 +145,6 @@ def ensure_embeddings_exist(
         "Try increasing RAG_DEMO_RETRIEVAL_LIMIT, RAG_DEMO_DOWNLOAD_LIMIT, "
         "or RAG_DEMO_EMBEDDING_LIMIT."
     )
-
-
-def print_demo_result(
-    *,
-    search_query: str,
-    question: str,
-    embedding_model: str,
-    generation_model: str,
-    ingestion_result: object,
-    answer: GroundedAnswer,
-) -> None:
-    """Print a readable full demo summary."""
-
-    retrieval_result = ingestion_result.retrieval_result
-
-    print("Academic Literature RAG end-to-end demo completed.")
-    print()
-    print("Configuration")
-    print(f"- Search query: {search_query}")
-    print(f"- Question: {question}")
-    print(f"- Embedding model: {embedding_model}")
-    print(f"- Generation model: {generation_model}")
-
-    print()
-    print("Retrieval")
-    print(f"- Source: {retrieval_result.run.source}")
-    print(f"- Run ID: {retrieval_result.run.run_id}")
-    print(f"- Status: {retrieval_result.run.status}")
-    print(f"- Papers persisted: {len(retrieval_result.papers)}")
-    print(f"- Raw response: {retrieval_result.run.raw_response_path}")
-
-    print()
-    print("Papers")
-    for index, paper in enumerate(
-        retrieval_result.papers,
-        start=1,
-    ):
-        print(f"{index}. {paper.title}")
-        print(f"   Year: {paper.publication_year}")
-        print(f"   PDF: {paper.open_access_pdf_url}")
-        print(f"   Landing URL: {paper.landing_url}")
-
-    print()
-    print("PDF processing")
-    if not ingestion_result.pdf_results:
-        print("- No pending PDFs were downloaded in this run.")
-    else:
-        for pdf_result in ingestion_result.pdf_results:
-            print(f"- PDF asset ID: {pdf_result.pdf_asset_id}")
-            print(f"  URL: {pdf_result.source_url}")
-            print(f"  Status: {pdf_result.status}")
-            print(f"  Pages: {pdf_result.page_count}")
-            print(f"  Chunks: {pdf_result.chunk_count}")
-            print(f"  Error: {pdf_result.error_message}")
-
-    print()
-    print("Embeddings")
-    if not ingestion_result.embedding_results:
-        print("- No missing chunks were embedded in this run.")
-    else:
-        for embedding_result in ingestion_result.embedding_results:
-            print(f"- Text chunk ID: {embedding_result.text_chunk_id}")
-            print(f"  Status: {embedding_result.status}")
-            print(f"  Model: {embedding_result.embedding_model}")
-            print(f"  Error: {embedding_result.error_message}")
-
-    print()
-    print("Answer")
-    print(answer.answer)
-
-    print()
-    print("Citations")
-    for index, citation in enumerate(
-        answer.citations,
-        start=1,
-    ):
-        print(f"{index}. Chunk ID: {citation.text_chunk_id}")
-        print(f"   PDF asset ID: {citation.pdf_asset_id}")
-        print(f"   Chunk index: {citation.chunk_index}")
-        print(f"   Pages: {citation.start_page_number}-{citation.end_page_number}")
-        print(f"   Similarity: {citation.similarity_score:.4f}")
-        print(f"   Text: {' '.join(citation.cited_text.split())[:500]}")
 
 
 def print_error(
