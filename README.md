@@ -583,10 +583,6 @@ Safe configuration management
 
 ## License
 
-Add a license before public release.
+This project is licensed under the MIT License.
 
-Recommended options:
-
-- MIT
-- Apache-2.0
-- Private repository while under active development
+See [LICENSE](LICENSE) for details.
