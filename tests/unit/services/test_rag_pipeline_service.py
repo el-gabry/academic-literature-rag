@@ -490,3 +490,28 @@ def test_answer_requires_configured_rag_answer_service() -> None:
         service.answer(
             "What is RAG?",
         )
+def test_ingest_refreshes_hybrid_index_when_configured() -> None:
+    class FakeHybridSearchService:
+        def __init__(self) -> None:
+            self.refresh_calls = 0
+
+        def refresh_index(self) -> int:
+            self.refresh_calls += 1
+            return 0
+
+    fake_hybrid_search_service = FakeHybridSearchService()
+
+    (service, *_rest) = build_service()
+    service._hybrid_search_service = fake_hybrid_search_service
+
+    service.ingest(query="retrieval augmented generation")
+
+    assert fake_hybrid_search_service.refresh_calls == 1
+
+
+def test_ingest_does_not_require_hybrid_search_service() -> None:
+    (service, *_rest) = build_service()
+
+    result = service.ingest(query="retrieval augmented generation")
+
+    assert result.retrieval_result is not None
