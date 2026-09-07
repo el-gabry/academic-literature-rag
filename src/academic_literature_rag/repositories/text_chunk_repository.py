@@ -98,6 +98,29 @@ class TextChunkRepository:
 
         return [self._to_model(record) for record in records]
 
+
+
+    def list_all(self) -> list[TextChunk]:
+        """Return every persisted text chunk across all PDF assets.
+
+        Used by HybridSearchService to build a BM25 index over the full
+        chunk corpus, since BM25 (unlike dense search) must be able to
+        match chunks that have not been embedded yet.
+        """
+
+        statement = select(TextChunkRecord).order_by(
+            TextChunkRecord.pdf_asset_id,
+            TextChunkRecord.chunk_index,
+        )
+
+        with self._session_factory() as session:
+            records = session.scalars(statement).all()
+
+        return [self._to_model(record) for record in records]
+
+
+
+
     @staticmethod
     def _ensure_pdf_asset_exists(
         *,

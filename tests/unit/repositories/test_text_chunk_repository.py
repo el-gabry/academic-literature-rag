@@ -213,3 +213,52 @@ def test_replace_rejects_chunks_for_different_pdf_asset(
                 )
             ],
         )
+
+def test_list_all_returns_empty_list_when_no_chunks_exist(
+    tmp_path: Path,
+) -> None:
+    repository, _session_factory = build_repository(tmp_path / "academic_literature_rag.db")
+
+    assert repository.list_all() == []
+
+
+def test_list_all_returns_chunks_across_multiple_pdf_assets(
+    tmp_path: Path,
+) -> None:
+    repository, session_factory = build_repository(tmp_path / "academic_literature_rag.db")
+
+    pdf_asset_one = create_pdf_asset(session_factory)
+    pdf_asset_two = create_pdf_asset(session_factory)
+
+    repository.replace_for_pdf_asset(
+        pdf_asset_id=pdf_asset_one,
+        chunks=[
+            TextChunk(
+                pdf_asset_id=pdf_asset_one,
+                chunk_index=0,
+                start_page_number=1,
+                end_page_number=1,
+                text="First asset, first chunk.",
+                char_count=len("First asset, first chunk."),
+            )
+        ],
+    )
+
+    repository.replace_for_pdf_asset(
+        pdf_asset_id=pdf_asset_two,
+        chunks=[
+            TextChunk(
+                pdf_asset_id=pdf_asset_two,
+                chunk_index=0,
+                start_page_number=1,
+                end_page_number=1,
+                text="Second asset, first chunk.",
+                char_count=len("Second asset, first chunk."),
+            )
+        ],
+    )
+
+    all_chunks = repository.list_all()
+
+    assert len(all_chunks) == 2
+    assert {chunk.pdf_asset_id for chunk in all_chunks} == {pdf_asset_one, pdf_asset_two}
