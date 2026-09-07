@@ -36,6 +36,9 @@ from academic_literature_rag.repositories.text_chunk_repository import (
 from academic_literature_rag.services.chunk_embedding_service import (
     ChunkEmbeddingService,
 )
+from academic_literature_rag.services.hybrid_search_service import (
+    HybridSearchService,
+)
 from academic_literature_rag.services.openai_embedding_client import (
     OpenAIEmbeddingClient,
 )
@@ -97,7 +100,7 @@ class RagCoreServices:
     pdf_text_extraction_service: PdfTextExtractionService
     text_chunking_service: TextChunkingService
     chunk_embedding_service: ChunkEmbeddingService
-    semantic_search_service: SemanticSearchService
+    semantic_search_service: SemanticSearchService | HybridSearchService
     rag_answer_service: RagAnswerService
 
 
@@ -253,11 +256,23 @@ class RagServiceFactory:
             embedding_client=embedding_client,
         )
 
-        semantic_search_service = SemanticSearchService(
+        dense_search_service = SemanticSearchService(
             chunk_embedding_repository=self._repositories.chunk_embedding_repository,
             text_chunk_repository=self._repositories.text_chunk_repository,
             embedding_client=embedding_client,
         )
+
+        semantic_search_service: SemanticSearchService | HybridSearchService
+
+        if self._config.retrieval_mode == "hybrid":
+            hybrid_search_service = HybridSearchService(
+                semantic_search_service=dense_search_service,
+                text_chunk_repository=self._repositories.text_chunk_repository,
+            )
+            hybrid_search_service.refresh_index()
+            semantic_search_service = hybrid_search_service
+        else:
+            semantic_search_service = dense_search_service
 
         rag_answer_service = RagAnswerService(
             semantic_search_service=semantic_search_service,

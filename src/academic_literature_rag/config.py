@@ -79,6 +79,7 @@ class AppConfig:
     storage: StorageConfig
     demo: DemoConfig
     semantic_scholar_api_key: str | None
+    retrieval_mode: str = "dense"
 
     @classmethod
     def from_env(
@@ -165,6 +166,11 @@ class AppConfig:
                 resolved_env,
                 "SEMANTIC_SCHOLAR_API_KEY",
             ),
+            retrieval_mode=_retrieval_mode_env(
+                resolved_env,
+                "RAG_RETRIEVAL_MODE",
+                default="dense",
+            ),
         )
 
 
@@ -226,5 +232,24 @@ def _positive_int_env(
 
     if value < 1:
         raise ConfigError(f"{name} must be at least 1.")
+
+    return value
+
+
+def _retrieval_mode_env(
+    env: Mapping[str, str],
+    name: str,
+    *,
+    default: str,
+) -> str:
+    """Return a validated retrieval mode: 'dense' or 'hybrid'."""
+
+    value = env.get(
+        name,
+        default,
+    ).strip().lower()
+
+    if value not in ("dense", "hybrid"):
+        raise ConfigError(f"{name} must be 'dense' or 'hybrid', got: {value!r}")
 
     return value
