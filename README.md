@@ -20,6 +20,7 @@ The project demonstrates an end-to-end AI engineering workflow for literature-ba
 - Text cleaning and chunking with page range tracking
 - OpenAI embedding integration
 - Semantic search over embedded chunks
+- Hybrid BM25 + dense retrieval with Reciprocal Rank Fusion
 - OpenAI grounded answer generation
 - Citation objects linked to retrieved evidence
 - Typed environment configuration
@@ -46,7 +47,7 @@ paper query
 → text cleaning
 → chunking
 → embedding generation
-→ semantic search
+→ semantic search (dense, or hybrid BM25 + dense)
 → prompt construction
 → answer generation
 → grounded citations
@@ -73,7 +74,7 @@ text processing
   ↓
 embedding services
   ↓
-semantic search
+semantic search (dense or hybrid)
   ↓
 prompt builder
   ↓
@@ -120,6 +121,10 @@ src/academic_literature_rag/
     text_chunk_repository.py
     chunk_embedding_repository.py
 
+  retrieval/
+    vector_math.py
+    bm25.py
+
   services/
     persisted_retrieval_service.py
     fallback_paper_search_service.py
@@ -130,6 +135,7 @@ src/academic_literature_rag/
     text_chunking_service.py
     chunk_embedding_service.py
     semantic_search_service.py
+    hybrid_search_service.py
     rag_prompt_builder.py
     rag_answer_service.py
     rag_pipeline_service.py
@@ -149,7 +155,7 @@ Environment-driven settings are centralized in:
 src/academic_literature_rag/config.py
 ```
 
-This keeps API keys, model names, storage paths, and demo limits out of individual scripts.
+This keeps API keys, model names, storage paths, retrieval mode, and demo limits out of individual scripts.
 
 ### Service factory
 
@@ -203,6 +209,21 @@ Logs are written to `stderr`, while rendered demo output is written to `stdout` 
 
 This keeps JSON and Markdown outputs clean for automation and reporting.
 
+### Hybrid retrieval
+
+By default the pipeline uses dense (embedding) semantic search only. Setting `RAG_RETRIEVAL_MODE=hybrid` switches to hybrid retrieval, which fuses dense search with a BM25 lexical index using Reciprocal Rank Fusion (RRF):
+
+```bash
+export RAG_RETRIEVAL_MODE=hybrid
+uv run academic-literature-rag demo
+```
+
+Dense embeddings can miss exact terminology — model names, acronyms, technical terms — that don't embed distinctly. BM25 catches exact lexical matches that dense search misses, and RRF combines both rankings by rank position, avoiding the need to normalize cosine similarity against BM25 scores, which live on different scales.
+
+The BM25 index is built from the full text-chunk corpus (including chunks that have not yet been embedded) and is refreshed automatically at the end of each ingestion run (`RagPipelineService.ingest()`).
+
+`RAG_RETRIEVAL_MODE` accepts `dense` (default) or `hybrid`, case-insensitive.
+
 ---
 
 ## Requirements
@@ -219,7 +240,7 @@ This keeps JSON and Markdown outputs clean for automation and reporting.
 Clone the repository:
 
 ```bash
-git clone https://github.com/el-gabry/academic-literature-rag.git
+git clone [https://github.com/el-gabry/academic-literature-rag.git](https://github.com/el-gabry/academic-literature-rag.git)
 cd academic-literature-rag
 ```
 
@@ -270,6 +291,8 @@ RAG_DEMO_DOWNLOAD_LIMIT=1
 RAG_DEMO_EMBEDDING_LIMIT=8
 RAG_DEMO_TOP_K=3
 
+RAG_RETRIEVAL_MODE=dense
+
 RAG_DEMO_DATABASE_PATH=data/db/dev.db
 RAG_DEMO_RAW_RESPONSE_DIR=data/raw_responses
 RAG_DEMO_PDF_DIR=data/pdfs
@@ -300,7 +323,7 @@ The demo runs:
 arXiv retrieval
 → PDF processing
 → OpenAI embedding generation
-→ semantic search
+→ semantic search (dense or hybrid)
 → OpenAI answer generation
 → citation printing
 ```
@@ -343,6 +366,12 @@ Run with Markdown output:
 
 ```bash
 uv run academic-literature-rag demo --format markdown
+```
+
+Run with hybrid retrieval:
+
+```bash
+RAG_RETRIEVAL_MODE=hybrid uv run academic-literature-rag demo
 ```
 
 Write JSON output directly to a file:
@@ -396,6 +425,12 @@ export RAG_DEMO_RETRIEVAL_LIMIT=3
 export RAG_DEMO_DOWNLOAD_LIMIT=1
 export RAG_DEMO_EMBEDDING_LIMIT=10
 export RAG_DEMO_TOP_K=5
+```
+
+Switch retrieval mode:
+
+```bash
+export RAG_RETRIEVAL_MODE=hybrid
 ```
 
 Run:
@@ -456,6 +491,8 @@ uv run pytest
 Run selected tests:
 
 ```bash
+uv run pytest tests/unit/retrieval/test_bm25.py
+uv run pytest tests/unit/services/test_hybrid_search_service.py
 uv run pytest tests/unit/services/test_rag_answer_service.py
 uv run pytest tests/unit/services/test_openai_generation_client.py
 uv run pytest tests/unit/services/test_openai_embedding_client.py
@@ -534,6 +571,7 @@ Text cleaning and chunking
 Embedding persistence
 OpenAI embedding client
 Semantic search
+Hybrid BM25 + dense retrieval with RRF fusion
 Prompt builder
 OpenAI generation client
 Grounded answer service
@@ -563,6 +601,7 @@ LLM application engineering
 OpenAI API integration
 PDF processing
 Semantic search
+Hybrid lexical + dense retrieval (BM25, Reciprocal Rank Fusion)
 Embedding pipelines
 SQL persistence
 Repository pattern

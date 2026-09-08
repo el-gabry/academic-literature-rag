@@ -9,6 +9,9 @@ from academic_literature_rag.services.chunk_embedding_service import (
     ChunkEmbeddingResult,
     ChunkEmbeddingService,
 )
+from academic_literature_rag.services.hybrid_search_service import (
+    HybridSearchService,
+)
 from academic_literature_rag.services.pending_pdf_download_service import (
     PendingPdfDownloadService,
 )
@@ -61,6 +64,7 @@ class RagPipelineService:
         text_chunking_service: TextChunkingService,
         chunk_embedding_service: ChunkEmbeddingService,
         rag_answer_service: RagAnswerService | None = None,
+        hybrid_search_service: HybridSearchService | None = None,
     ) -> None:
         self._persisted_retrieval_service = persisted_retrieval_service
         self._pending_pdf_download_service = pending_pdf_download_service
@@ -68,6 +72,7 @@ class RagPipelineService:
         self._text_chunking_service = text_chunking_service
         self._chunk_embedding_service = chunk_embedding_service
         self._rag_answer_service = rag_answer_service
+        self._hybrid_search_service = hybrid_search_service
 
     def ingest(
         self,
@@ -109,6 +114,9 @@ class RagPipelineService:
         embedding_results = self._chunk_embedding_service.embed_missing_chunks(
             limit=embedding_limit,
         )
+
+        if self._hybrid_search_service is not None:
+            self._hybrid_search_service.refresh_index()
 
         return RagPipelineIngestionResult(
             retrieval_result=retrieval_result,
