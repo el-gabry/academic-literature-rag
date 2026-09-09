@@ -226,3 +226,4 @@ data/
 
 # Local environment variables
 .env
+retrieval_comparison.csv
