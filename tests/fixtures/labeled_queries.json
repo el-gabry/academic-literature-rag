@@ -1,0 +1,72 @@
+[
+  {
+    "query": "What is PMPNet and how does it use message passing on point cloud data?",
+    "relevant_chunk_ids": [
+      "dcb6d210-0322-4b0a-9338-4f54631dd921",
+      "089d3748-76ef-4f8d-9b52-12646e7d6ac3"
+    ]
+  },
+  {
+    "query": "How does AST-GRU capture long-term temporal information in point cloud video?",
+    "relevant_chunk_ids": [
+      "8a237e70-9003-441d-b990-57bc33453fca",
+      "2dac3cbe-2203-415b-ba84-d00740dd3fac",
+      "559e4d03-6412-4c82-80e8-40c412a1aa7b"
+    ]
+  },
+  {
+    "query": "Which dataset and benchmark was used to evaluate the 3D video object detector?",
+    "relevant_chunk_ids": [
+      "20f6325b-438a-4147-af75-c269917c48a9",
+      "7d6efe4f-257f-4bab-8ab7-70f3c5eebd0b"
+    ]
+  },
+  {
+    "query": "How does the number of input frames affect detection performance?",
+    "relevant_chunk_ids": [
+      "563d4b3a-33f3-483e-8ac4-7c3d33e6ea14"
+    ]
+  },
+  {
+    "query": "What are the limitations of single-frame 3D object detectors compared to video-based detectors?",
+    "relevant_chunk_ids": [
+      "885f90b0-7d91-4dcf-a9ae-856181059f3e",
+      "b47ba3ec-4eef-41ab-8eb7-f81c4fe294c8"
+    ]
+  },
+  {
+    "query": "What is Energy Gated Attention (EGA) and how does it work?",
+    "relevant_chunk_ids": [
+      "925ccd67-ebd4-4e6d-b0e0-00f7e8e4b112",
+      "e9839659-10b0-4b8f-9ca2-350036e576f3"
+    ]
+  },
+  {
+    "query": "Are EGA and MOPE complementary, and what results demonstrate this?",
+    "relevant_chunk_ids": [
+      "0cf0a31e-5a40-4c2a-8b59-408f4fbf048c",
+      "47d15d2e-bb5e-450e-a679-ccdceb863c1f",
+      "ef0ea416-34b1-40eb-871c-77e36333470e"
+    ]
+  },
+  {
+    "query": "How does Morlet positional encoding (MOPE) relate to RoPE and ALiBi?",
+    "relevant_chunk_ids": [
+      "91de36aa-44f0-4ce4-86b3-41e9bc83cc7a",
+      "5a928a7d-2a1f-44bc-8d7b-93498b1d1c34"
+    ]
+  },
+  {
+    "query": "What dataset was used to evaluate the EGA-MORLET attention mechanism?",
+    "relevant_chunk_ids": [
+      "3757291b-e933-4e43-9b1f-c477d0ac3f8f"
+    ]
+  },
+  {
+    "query": "What GPU memory issue occurred during training and how was it addressed?",
+    "relevant_chunk_ids": [
+      "f7cd4a70-2160-495b-bd4a-e81c7914c116",
+      "3068ba99-ba0a-456d-a830-46835b679601"
+    ]
+  }
+]
