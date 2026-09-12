@@ -242,14 +242,22 @@ def _retrieval_mode_env(
     *,
     default: str,
 ) -> str:
-    """Return a validated retrieval mode: 'dense' or 'hybrid'."""
+    """Return a validated retrieval mode."""
 
     value = env.get(
         name,
         default,
     ).strip().lower()
 
-    if value not in ("dense", "hybrid"):
-        raise ConfigError(f"{name} must be 'dense' or 'hybrid', got: {value!r}")
+    valid_modes = (
+        "dense",
+        "hybrid",
+        "hybrid_rerank",
+    )
+
+    if value not in valid_modes:
+        raise ConfigError(
+            f"{name} must be one of {valid_modes}, got: {value!r}"
+        )
 
     return value
