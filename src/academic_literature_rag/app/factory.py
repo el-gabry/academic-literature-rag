@@ -66,6 +66,9 @@ from academic_literature_rag.services.rag_pipeline_service import (
 from academic_literature_rag.services.rag_prompt_builder import (
     RagPromptBuilder,
 )
+from academic_literature_rag.services.reranking_search_service import (
+    RerankingSearchService,
+)
 from academic_literature_rag.services.semantic_search_service import (
     SemanticSearchService,
 )
@@ -100,7 +103,11 @@ class RagCoreServices:
     pdf_text_extraction_service: PdfTextExtractionService
     text_chunking_service: TextChunkingService
     chunk_embedding_service: ChunkEmbeddingService
-    semantic_search_service: SemanticSearchService | HybridSearchService
+    semantic_search_service: (
+        SemanticSearchService
+        | HybridSearchService
+        | RerankingSearchService
+    )
     rag_answer_service: RagAnswerService
 
 
@@ -262,15 +269,28 @@ class RagServiceFactory:
             embedding_client=embedding_client,
         )
 
-        semantic_search_service: SemanticSearchService | HybridSearchService
+        semantic_search_service: (
+            SemanticSearchService
+            | HybridSearchService
+            | RerankingSearchService
+        )
 
-        if self._config.retrieval_mode == "hybrid":
+        if self._config.retrieval_mode in (
+            "hybrid",
+            "hybrid_rerank",
+        ):
             hybrid_search_service = HybridSearchService(
                 semantic_search_service=dense_search_service,
                 text_chunk_repository=self._repositories.text_chunk_repository,
             )
             hybrid_search_service.refresh_index()
-            semantic_search_service = hybrid_search_service
+
+            if self._config.retrieval_mode == "hybrid_rerank":
+                semantic_search_service = RerankingSearchService(
+                    base_search_service=hybrid_search_service,
+                )
+            else:
+                semantic_search_service = hybrid_search_service
         else:
             semantic_search_service = dense_search_service
 
