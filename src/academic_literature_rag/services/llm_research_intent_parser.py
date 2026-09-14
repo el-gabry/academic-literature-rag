@@ -3,7 +3,9 @@ from __future__ import annotations
 import json
 
 from pydantic import ValidationError
-
+from academic_literature_rag.services.research_intent_consistency_service import (
+    ResearchIntentConsistencyService,
+)
 from academic_literature_rag.models.research_intent import (
     ResearchIntent,
     ResearchNeed,
@@ -17,12 +19,14 @@ from academic_literature_rag.services.research_intent_parser import (
 class LlmResearchIntentParser:
     """Parse free-text research ideas into validated ResearchIntent objects."""
 
-    def __init__(
-        self,
-        *,
-        generation_client: GenerationClient,
-    ) -> None:
+    def __init__(self,*, generation_client: GenerationClient,
+    consistency_service: ResearchIntentConsistencyService | None = None,
+        ) -> None:
         self._generation_client = generation_client
+        self._consistency_service = (
+            consistency_service
+            or ResearchIntentConsistencyService()
+        )
 
     def parse(
         self,
@@ -53,9 +57,13 @@ class LlmResearchIntentParser:
                 "Research intent parser returned empty output."
             )
 
-        return self._parse_output(
-            raw_output=raw_output,
-            original_research_idea=normalized_idea,
+        intent = self._parse_output(
+        raw_output=raw_output,
+        original_research_idea=normalized_idea,
+    )
+
+        return self._consistency_service.ensure_consistency(
+            intent,
         )
 
     @staticmethod

@@ -284,3 +284,43 @@ def test_parser_wraps_generation_failure() -> None:
         parser.parse(
             "Study trustworthy CPD."
         )
+def test_parser_restores_explicit_research_needs() -> None:
+    client = FakeGenerationClient(
+        response_text="""
+        {
+          "research_question": "How can CPD be validated?",
+          "target_concepts": [
+            "change-point detection",
+            "reliability"
+          ],
+          "primary_domains": [
+            "physiological time series"
+          ],
+          "secondary_domains": [],
+          "research_needs": [
+            "methods",
+            "limitations"
+          ],
+          "allow_cross_domain_transfer": true
+        }
+        """
+    )
+
+    parser = LlmResearchIntentParser(
+        generation_client=client,
+    )
+
+    intent = parser.parse(
+        "I want methods for change-point detection with experimental "
+        "validation, review literature, limitations, contradictory "
+        "evidence, and benchmark studies."
+    )
+
+    assert intent.research_needs == [
+        ResearchNeed.METHODS,
+        ResearchNeed.LIMITATIONS,
+        ResearchNeed.EMPIRICAL_EVIDENCE,
+        ResearchNeed.SYNTHESIS,
+        ResearchNeed.BENCHMARKS,
+        ResearchNeed.COUNTER_EVIDENCE,
+    ]
